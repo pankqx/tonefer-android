@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0 — October 2026
+
+- **Connect again** and **Scan pairing code again** in the menu and on the offline banner
+- **Turn on hotspot** in the menu
+- Looks the same as the phone web app: "?" help button in the top bar, plain background, the same empty state and dividers
+
 ## 1.1.1 — October 2026
 
 - Sharp, square corners everywhere. Only the top bar keeps its rounded status pill and logo.

@@ -24,7 +24,7 @@ enum class TextSize(val label: String, val scale: Float) {
 
 enum class Typeface(val label: String) { MONO("Mono"), SANS("Sans") }
 
-enum class Backdrop(val label: String) { DOTS("Dotted"), PLAIN("Plain") }
+enum class Backdrop(val label: String) { PLAIN("Plain"), DOTS("Dotted") }
 
 enum class WindowStyle(val label: String) { FLAT("Flat"), CLASSIC("Classic") }
 
@@ -37,7 +37,7 @@ data class AppSettings(
     val theme: ThemeMode = ThemeMode.SYSTEM,
     val textSize: TextSize = TextSize.MEDIUM,
     val typeface: Typeface = Typeface.MONO,
-    val backdrop: Backdrop = Backdrop.DOTS,
+    val backdrop: Backdrop = Backdrop.PLAIN,
     val windowStyle: WindowStyle = WindowStyle.FLAT,
     val autoSavePhotos: Boolean = true,
     val autoSaveFiles: Boolean = false,

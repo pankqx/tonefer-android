@@ -90,6 +90,9 @@ import com.pankqx.tonefer.ui.theme.LocalTone
 import com.pankqx.tonefer.ui.theme.ts
 import com.pankqx.tonefer.util.Files
 import com.pankqx.tonefer.util.Hotspot
+import com.pankqx.tonefer.data.Pairing
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -141,6 +144,29 @@ fun HomeScreen(app: ToneferApp, onSettings: () -> Unit, onHelp: () -> Unit, onAb
             }
         }
     }
+    // "Scan again": pair with a new code without leaving the app (e.g. after "Unpair all phones").
+    val rescan = rememberLauncherForActivityResult(ScanContract()) { result ->
+        val raw = result.contents ?: return@rememberLauncherForActivityResult
+        val p = Pairing.parse(raw)
+        if (p == null) {
+            Toast.makeText(context, "That isn't a Tonefer pairing code", Toast.LENGTH_SHORT).show()
+        } else {
+            scope.launch {
+                app.settings.update { it.copy(pairing = p) }
+                app.client.reconnect()
+                Toast.makeText(context, "Paired. Connecting…", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+    fun scanAgain() = rescan.launch(
+        ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+            .setPrompt("Scan the code in Tonefer on your laptop").setBeepEnabled(false).setOrientationLocked(false)
+    )
+    fun connectAgain() {
+        app.client.reconnect()
+        Toast.makeText(context, "Connecting again…", Toast.LENGTH_SHORT).show()
+    }
+
     val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(50)) { sendUris(it) }
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { sendUris(it) }
 
@@ -153,14 +179,22 @@ fun HomeScreen(app: ToneferApp, onSettings: () -> Unit, onHelp: () -> Unit, onAb
             ) {
                 Brand()
                 Spacer(Modifier.weight(1f))
-                StatusLight(conn is Conn.Online, statusLabel(conn), Modifier.widthIn(max = 170.dp))
-                Spacer(Modifier.width(4.dp))
+                StatusLight(conn is Conn.Online, statusLabel(conn), Modifier.widthIn(max = 150.dp))
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    Modifier.size(32.dp).clip(androidx.compose.foundation.shape.CircleShape).background(tone.soft)
+                        .clickableNoRipple(onHelp),
+                    contentAlignment = Alignment.Center,
+                ) { Text("?", fontWeight = FontWeight.SemiBold, fontSize = ts(14f)) }
+                Spacer(Modifier.width(2.dp))
                 Box {
                     MiniIcon(R.drawable.ic_more, "Menu", tone.ink) { menu = true }
                     RetroMenu(menu, onDismiss = { menu = false }) {
+                        MenuRow("Connect again") { menu = false; connectAgain() }
+                        MenuRow("Scan pairing code again") { menu = false; scanAgain() }
+                        MenuRow("Turn on hotspot") { menu = false; Hotspot.open(context) }
                         MenuRow("Settings") { menu = false; onSettings() }
                         MenuRow("Instructions") { menu = false; onHelp() }
-                        MenuRow("Find laptop again") { menu = false; app.client.reconnect() }
                         MenuRow("About Tonefer") { menu = false; onAbout() }
                     }
                 }
@@ -175,12 +209,13 @@ fun HomeScreen(app: ToneferApp, onSettings: () -> Unit, onHelp: () -> Unit, onAb
                 text = (if (queued > 0) "$queued waiting. They'll send by themselves once connected. " else "") +
                     "Turn on your hotspot (or USB tethering). The laptop joins it automatically after the one-click setup.",
                 onHotspot = { if (!Hotspot.open(context)) Toast.makeText(context, "Open Settings → Hotspot", Toast.LENGTH_SHORT).show() },
-                onRetry = if (c == Conn.Searching) null else ({ app.client.reconnect() }),
+                onRetry = if (c == Conn.Searching) null else ({ connectAgain() }),
+                onRescan = { scanAgain() },
             )
             else -> if (queued > 0) Banner(
                 title = "Sending $queued queued item${if (queued == 1) "" else "s"}…",
                 text = "Delivering what you shared while the laptop was away.",
-                onHotspot = null, onRetry = null,
+                onHotspot = null, onRetry = null, onRescan = null,
             )
         }
 
@@ -309,9 +344,9 @@ private fun dayLabel(ts: Long): String {
 private fun DayRule(label: String) {
     val tone = LocalTone.current
     Row(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        DottedLine(Modifier.weight(1f))
+        Box(Modifier.weight(1f).height(1.dp).background(tone.line))
         Label(label, Modifier.padding(horizontal = 12.dp), tone.muted)
-        DottedLine(Modifier.weight(1f))
+        Box(Modifier.weight(1f).height(1.dp).background(tone.line))
     }
 }
 
@@ -328,19 +363,23 @@ private fun DottedLine(modifier: Modifier) {
 @Composable
 private fun EmptyState(online: Boolean) {
     val tone = LocalTone.current
-    Box(Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) {
-        Column(
-            Modifier.widthIn(max = 320.dp).clip(RectangleShape).background(tone.paper).ruled().padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(if (online) "No transfers yet" else "Waiting for laptop", fontWeight = FontWeight.SemiBold, fontSize = ts(16f))
-            Spacer(Modifier.height(8.dp))
-            Text(
-                if (online) "Type a note below, tap + for photos, or use Share → Tonefer from any app."
-                else "Open Tonefer on your laptop. This screen fills in as soon as it connects.",
-                color = tone.muted, fontSize = ts(13f), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
+    // Same as the phone web app: a teal block with a coral square, then the message.
+    Column(Modifier.fillMaxWidth().padding(top = 46.dp, start = 24.dp, end = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(140.dp, 64.dp)) {
+            Box(Modifier.align(Alignment.BottomCenter).size(112.dp, 56.dp).background(tone.accent))
+            Box(Modifier.align(Alignment.TopEnd).padding(end = 6.dp).size(26.dp).background(tone.danger))
         }
+        Spacer(Modifier.height(22.dp))
+        Text(if (online) "Connected" else "Waiting for laptop", fontWeight = FontWeight.SemiBold, fontSize = ts(19f))
+        Spacer(Modifier.height(8.dp))
+        Box(Modifier.size(22.dp, 3.dp).background(tone.danger))
+        Spacer(Modifier.height(12.dp))
+        Text(
+            if (online) "Send a note or a photo. It lands on your laptop right away."
+            else "Open Tonefer on your laptop. This screen fills in as soon as it connects.",
+            color = tone.muted, fontSize = ts(14f), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.widthIn(max = 320.dp),
+        )
     }
 }
 
@@ -472,7 +511,7 @@ fun ProgressBar(progress: Float) {
 }
 
 @Composable
-private fun Banner(title: String, text: String, onHotspot: (() -> Unit)?, onRetry: (() -> Unit)?) {
+private fun Banner(title: String, text: String, onHotspot: (() -> Unit)?, onRetry: (() -> Unit)?, onRescan: (() -> Unit)? = null) {
     val tone = LocalTone.current
     val shape = RectangleShape
     Column(
@@ -484,9 +523,14 @@ private fun Banner(title: String, text: String, onHotspot: (() -> Unit)?, onRetr
         Text(text, color = tone.muted, fontSize = ts(12.5f), lineHeight = ts(18f))
         if (onHotspot != null || onRetry != null) {
             Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (onHotspot != null) RetroButton("Turn on hotspot", primary = true, onClick = onHotspot)
-                if (onRetry != null) RetroButton("Retry", icon = R.drawable.ic_refresh, onClick = onRetry)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (onHotspot != null) RetroButton("Turn on hotspot", primary = true, onClick = onHotspot, modifier = Modifier.fillMaxWidth())
+                if (onRetry != null) RetroButton("Connect again", icon = R.drawable.ic_refresh, onClick = onRetry, modifier = Modifier.fillMaxWidth())
+            }
+            if (onRescan != null) {
+                Spacer(Modifier.height(8.dp))
+                Text("Scan the pairing code again", color = tone.accent, fontSize = ts(12.5f), fontWeight = FontWeight.Medium,
+                    modifier = Modifier.clickableNoRipple(onRescan).padding(vertical = 6.dp))
             }
         }
     }
