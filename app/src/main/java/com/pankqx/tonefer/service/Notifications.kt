@@ -20,6 +20,7 @@ object Notifications {
     const val CH_TRANSFERS_QUIET = "transfers_quiet"
     const val CH_CONNECTION = "connection"
     const val ID_SERVICE = 1
+    const val ID_QUEUE = 2
     private var nextId = 100
 
     fun createChannels(context: Context) {
@@ -63,6 +64,39 @@ object Notifications {
         .setPriority(NotificationCompat.PRIORITY_MIN)
         .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
         .build()
+
+    /** "Waiting for your laptop" with a one-tap hotspot shortcut. */
+    fun queued(context: Context, count: Int) {
+        val nm = NotificationManagerCompat.from(context)
+        if (!nm.areNotificationsEnabled()) return
+        val hotspot = PendingIntent.getActivity(context, 7, com.pankqx.tonefer.util.Hotspot.intent(),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val n = NotificationCompat.Builder(context, CH_TRANSFERS_QUIET)
+            .setSmallIcon(R.drawable.ic_stat_tonefer)
+            .setContentTitle(if (count == 1) "1 item waiting for your laptop" else "$count items waiting for your laptop")
+            .setContentText("Turn on your hotspot. Tonefer sends it as soon as the laptop connects.")
+            .setStyle(NotificationCompat.BigTextStyle().bigText("Turn on your hotspot. Tonefer sends it as soon as the laptop connects."))
+            .setContentIntent(openApp(context))
+            .addAction(R.drawable.ic_link, "Turn on hotspot", hotspot)
+            .setOngoing(false)
+            .setOnlyAlertOnce(true)
+            .build()
+        try { nm.notify(ID_QUEUE, n) } catch (_: SecurityException) { }
+    }
+
+    fun delivered(context: Context, count: Int, laptop: String) {
+        val nm = NotificationManagerCompat.from(context)
+        nm.cancel(ID_QUEUE)
+        if (!nm.areNotificationsEnabled()) return
+        val n = NotificationCompat.Builder(context, CH_TRANSFERS_QUIET)
+            .setSmallIcon(R.drawable.ic_stat_tonefer)
+            .setContentTitle(if (count == 1) "Sent to $laptop" else "Sent $count items to $laptop")
+            .setContentText("Delivered after the laptop connected.")
+            .setContentIntent(openApp(context))
+            .setAutoCancel(true)
+            .build()
+        try { nm.notify(ID_QUEUE, n) } catch (_: SecurityException) { }
+    }
 
     fun incoming(context: Context, item: Item, laptop: String, vibrate: Boolean, savedTo: String?) {
         val nm = NotificationManagerCompat.from(context)

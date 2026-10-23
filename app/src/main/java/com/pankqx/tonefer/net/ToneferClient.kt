@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -50,7 +51,10 @@ sealed interface Conn {
     data object Unpaired : Conn
 }
 
-data class Upload(val id: String, val name: String, val progress: Float)
+data class Upload(val id: String, val name: String, val progress: Float, val bps: Double = 0.0)
+
+/** Result of a speed test, bytes per second each way. */
+data class SpeedResult(val down: Double, val up: Double, val at: Long = System.currentTimeMillis())
 
 /** Something to send: a name, a type and a way to read the bytes. */
 class Outgoing(val name: String, val mime: String, val read: () -> ByteArray)
@@ -81,8 +85,25 @@ class ToneferClient(
     private val _uploads = MutableStateFlow<List<Upload>>(emptyList())
     val uploads: StateFlow<List<Upload>> = _uploads.asStateFlow()
 
+    private val _queued = MutableStateFlow(0)
+    /** Items waiting for the laptop (shared while it was unreachable). */
+    val queued: StateFlow<Int> = _queued.asStateFlow()
+
+    private val _speed = MutableStateFlow<SpeedResult?>(null)
+    val speed: StateFlow<SpeedResult?> = _speed.asStateFlow()
+
     /** Called for every new item that came from the laptop (notifications, auto-save…). */
     var onIncoming: (suspend (Item) -> Unit)? = null
+
+    /** Called after queued items were delivered. */
+    var onQueueDelivered: ((Int) -> Unit)? = null
+
+    private val queueDir get() = File(context.filesDir, "queue").apply { mkdirs() }
+    private val flushLock = kotlinx.coroutines.sync.Mutex()
+
+    init {
+        _queued.value = queueDir.listFiles { f -> f.name.endsWith(".json") }?.size ?: 0
+    }
 
     private var loop: Job? = null
     @Volatile private var socket: WebSocket? = null
@@ -131,7 +152,8 @@ class ToneferClient(
                         Discovery.Result.NotFound -> {
                             _conn.value = Conn.Offline("Laptop not found")
                             delay(backoff)
-                            backoff = (backoff * 2).coerceAtMost(15_000)
+                            // Search harder while something is waiting to be sent.
+                            backoff = (backoff * 2).coerceAtMost(if (_queued.value > 0) 4_000 else 15_000)
                             continue
                         }
                     }
@@ -180,6 +202,7 @@ class ToneferClient(
                 _items.value = list
                 val laptop = msg.optString("host", "Laptop")
                 _conn.value = Conn.Online(p.host, laptop)
+                if (_queued.value > 0) scope.launch(Dispatchers.IO) { flushQueue() }
                 if (laptop != p.laptop) scope.launch {
                     settings.update { s -> s.copy(pairing = s.pairing?.copy(laptop = laptop)) }
                 }
@@ -194,10 +217,13 @@ class ToneferClient(
                 _items.update { list -> list.filterNot { it.id == id } }
             }
             "cleared" -> _items.value = emptyList()
+            "speedtest" -> scope.launch(Dispatchers.IO) { runSpeedTest(p, msg.optLong("bytes", 16L * 1024 * 1024)) }
         }
     }
 
-    private suspend fun awaitOnline(timeoutMs: Long = 12_000): Boolean {
+    val isOnline get() = _conn.value is Conn.Online
+
+    suspend fun awaitOnline(timeoutMs: Long = 12_000): Boolean {
         start()
         return withTimeoutOrNull(timeoutMs) { conn.first { it is Conn.Online } } != null
     }
@@ -211,17 +237,25 @@ class ToneferClient(
 
     // ------------------------------------------------------------------ sending
 
-    suspend fun sendText(text: String): Boolean {
+    /** Sends a note. If the laptop can't be reached it is queued and sent automatically later. */
+    suspend fun sendText(text: String, queueIfOffline: Boolean = true): Boolean {
         if (text.isBlank()) return false
-        if (!awaitOnline()) return false
+        if (!awaitOnline()) {
+            if (queueIfOffline) enqueue(listOf(QueuedText(text)))
+            return false
+        }
         val p = settings.current.pairing ?: return false
         val payload = JSONObject().put("type", "text").put("text", text)
         return socket?.send(Box.sealJson(p.key, payload)) == true
     }
 
     /** Sends each file; returns how many arrived. */
-    suspend fun sendFiles(files: List<Outgoing>): Int = withContext(Dispatchers.IO) {
-        if (files.isEmpty() || !awaitOnline()) return@withContext 0
+    suspend fun sendFiles(files: List<Outgoing>, queueIfOffline: Boolean = true): Int = withContext(Dispatchers.IO) {
+        if (files.isEmpty()) return@withContext 0
+        if (!awaitOnline()) {
+            if (queueIfOffline) enqueue(files)
+            return@withContext 0
+        }
         var ok = 0
         for (f in files) if (upload(f)) ok++
         ok
@@ -246,7 +280,7 @@ class ToneferClient(
             if (bytes.size > MAX_BYTES) throw IllegalStateException("File is larger than 400 MB")
             val sealed = Box.seal(p.key, bytes)
             val meta = Box.sealJson(p.key, JSONObject().put("name", name).put("mime", mime))
-            val body = ProgressBody(sealed) { prog -> _uploads.update { l -> l.map { if (it.id == id) it.copy(progress = prog) else it } } }
+            val body = ProgressBody(sealed) { prog, bps -> _uploads.update { l -> l.map { if (it.id == id) it.copy(progress = prog, bps = bps) else it } } }
             val req = Request.Builder()
                 .url("${p.baseUrl}/api/upload")
                 .header("X-Tonefer-Token", p.token)
@@ -322,23 +356,113 @@ class ToneferClient(
         out
     }
 
+    // ------------------------------------------------------------------ offline queue
+
+    private class QueuedText(val text: String)
+
+    /** Stores items on disk until the laptop is reachable again. */
+    private suspend fun enqueue(entries: List<Any>) = withContext(Dispatchers.IO) {
+        for (e in entries) {
+            val id = "${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}"
+            val meta = JSONObject()
+            when (e) {
+                is QueuedText -> meta.put("type", "text").put("text", e.text)
+                is Outgoing -> {
+                    val bytes = try { e.read() } catch (_: Exception) { continue }
+                    File(queueDir, "$id.bin").writeBytes(bytes)
+                    meta.put("type", "file").put("name", e.name).put("mime", e.mime)
+                }
+            }
+            File(queueDir, "$id.json").writeText(meta.toString())
+        }
+        _queued.value = queueDir.listFiles { f -> f.name.endsWith(".json") }?.size ?: 0
+        start()
+    }
+
+    /** Public entry point for the share sheet: queue now, deliver as soon as the laptop appears. */
+    suspend fun queue(text: String?, files: List<Outgoing>) {
+        enqueue(buildList { if (text != null) add(QueuedText(text)); addAll(files) })
+    }
+
+    private suspend fun flushQueue() = flushLock.withLock {
+        val entries = queueDir.listFiles { f -> f.name.endsWith(".json") }?.sortedBy { it.name } ?: return@withLock
+        var delivered = 0
+        for (metaFile in entries) {
+            if (!isOnline) break
+            val meta = try { JSONObject(metaFile.readText()) } catch (_: Exception) { metaFile.delete(); continue }
+            val data = File(queueDir, metaFile.name.removeSuffix(".json") + ".bin")
+            val ok = when (meta.optString("type")) {
+                "text" -> {
+                    val p = settings.current.pairing
+                    p != null && socket?.send(Box.sealJson(p.key, JSONObject().put("type", "text").put("text", meta.optString("text")))) == true
+                }
+                else -> data.exists() && upload(Outgoing(meta.optString("name", "file"), meta.optString("mime", "application/octet-stream")) { data.readBytes() })
+            }
+            if (ok) {
+                metaFile.delete(); data.delete(); delivered++
+                _queued.value = (_queued.value - 1).coerceAtLeast(0)
+            } else break
+        }
+        if (delivered > 0) onQueueDelivered?.invoke(delivered)
+    }
+
+    fun clearQueue() {
+        queueDir.deleteRecursively()
+        _queued.value = 0
+    }
+
+    // ------------------------------------------------------------------ speed test
+
+    /** Answers a speed test started from the laptop: download then upload [bytes] of filler. */
+    private suspend fun runSpeedTest(p: Pairing, bytes: Long) = withContext(Dispatchers.IO) {
+        try {
+            val t0 = System.nanoTime()
+            http.newCall(Request.Builder().url("${p.baseUrl}/api/speedtest?n=$bytes").header("X-Tonefer-Token", p.token).build())
+                .execute().use { r ->
+                    val src = r.body!!.source()
+                    val buf = okio.Buffer()
+                    while (src.read(buf, 256L * 1024) != -1L) buf.clear()
+                }
+            val down = bytes / ((System.nanoTime() - t0) / 1e9)
+            val filler = object : RequestBody() {
+                override fun contentType() = "application/octet-stream".toMediaType()
+                override fun contentLength() = bytes
+                override fun writeTo(sink: BufferedSink) {
+                    val chunk = ByteArray(CHUNK)
+                    var left = bytes
+                    while (left > 0) { val n = minOf(CHUNK.toLong(), left).toInt(); sink.write(chunk, 0, n); left -= n }
+                }
+            }
+            val t1 = System.nanoTime()
+            http.newCall(Request.Builder().url("${p.baseUrl}/api/speedtest").header("X-Tonefer-Token", p.token).post(filler).build())
+                .execute().close()
+            val up = bytes / ((System.nanoTime() - t1) / 1e9)
+            _speed.value = SpeedResult(down, up)
+        } catch (_: Exception) { }
+    }
+
     fun clearCache() {
         File(context.cacheDir, "received").deleteRecursively()
         File(context.cacheDir, "outgoing").deleteRecursively()
     }
 
-    private class ProgressBody(private val data: ByteArray, private val onProgress: (Float) -> Unit) : RequestBody() {
+    private class ProgressBody(private val data: ByteArray, private val onProgress: (Float, Double) -> Unit) : RequestBody() {
         override fun contentType() = "application/octet-stream".toMediaType()
         override fun contentLength() = data.size.toLong()
         override fun writeTo(sink: BufferedSink) {
             var sent = 0
             var lastReport = 0f
+            val start = System.nanoTime()
             while (sent < data.size) {
                 val n = minOf(CHUNK, data.size - sent)
                 sink.write(data, sent, n)
                 sent += n
                 val p = sent.toFloat() / data.size
-                if (p - lastReport > 0.02f || sent == data.size) { onProgress(p); lastReport = p }
+                if (p - lastReport > 0.02f || sent == data.size) {
+                    val secs = (System.nanoTime() - start) / 1e9
+                    onProgress(p, if (secs > 0.2) sent / secs else 0.0)
+                    lastReport = p
+                }
             }
         }
     }

@@ -37,6 +37,11 @@ data class Tone(
     val signal: Color,
     val danger: Color,
     val shadow: Color,
+    val line: Color,
+    val accent: Color,
+    val accentInk: Color,
+    val accentSoft: Color,
+    val sun: Color,
     val dark: Boolean,
     val classic: Boolean = true,
     val dots: Boolean = true,
@@ -52,17 +57,21 @@ val PlexMono = FontFamily(
 )
 
 private val Light = Tone(
-    desk = Color(0xFFE9E6DD), paper = Color(0xFFFBFAF6), ink = Color(0xFF141414),
-    muted = Color(0xFF6E6B64), soft = Color(0xFFDCD8CC),
-    mine = Color(0xFF141414), mineInk = Color(0xFFFBFAF6), mineMuted = Color(0x99FBFAF6),
-    signal = Color(0xFF1A7F37), danger = Color(0xFFB3261E), shadow = Color(0xFF141414), dark = false,
+    desk = Color(0xFFF0EFED), paper = Color(0xFFF7F6F4), ink = Color(0xFF262423),
+    muted = Color(0xFF77736D), soft = Color(0xFFE7E5E1),
+    mine = Color(0xFF279595), mineInk = Color(0xFFF7F6F4), mineMuted = Color(0xB8F7F6F4),
+    signal = Color(0xFF279595), danger = Color(0xFFE5533F), shadow = Color(0x33262423),
+    line = Color(0x2E262423), accent = Color(0xFF279595), accentInk = Color(0xFFF7F6F4),
+    accentSoft = Color(0x1F279595), sun = Color(0xFFFDD751), dark = false,
 )
 
 private val Dark = Tone(
-    desk = Color(0xFF0D0D0C), paper = Color(0xFF171716), ink = Color(0xFFECEBE6),
-    muted = Color(0xFF8D8A83), soft = Color(0xFF262624),
-    mine = Color(0xFFECEBE6), mineInk = Color(0xFF141414), mineMuted = Color(0x99141414),
-    signal = Color(0xFF4CCF6A), danger = Color(0xFFFF6B5E), shadow = Color(0xFF000000), dark = true,
+    desk = Color(0xFF1B1A19), paper = Color(0xFF232120), ink = Color(0xFFE6E3DE),
+    muted = Color(0xFF9B968F), soft = Color(0xFF2C2A28),
+    mine = Color(0xFF1F4F4D), mineInk = Color(0xFFE6F1EF), mineMuted = Color(0x9EE6F1EF),
+    signal = Color(0xFF3AA9A6), danger = Color(0xFFF2765F), shadow = Color(0x66000000),
+    line = Color(0x24E6E3DE), accent = Color(0xFF3AA9A6), accentInk = Color(0xFF102221),
+    accentSoft = Color(0x243AA9A6), sun = Color(0xFFE9C95A), dark = true,
 )
 
 val LocalTone = staticCompositionLocalOf { Light }

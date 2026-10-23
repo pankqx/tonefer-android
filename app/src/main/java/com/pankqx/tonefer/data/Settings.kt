@@ -26,7 +26,7 @@ enum class Typeface(val label: String) { MONO("Mono"), SANS("Sans") }
 
 enum class Backdrop(val label: String) { DOTS("Dotted"), PLAIN("Plain") }
 
-enum class WindowStyle(val label: String) { CLASSIC("Classic"), FLAT("Flat") }
+enum class WindowStyle(val label: String) { FLAT("Soft"), CLASSIC("Classic") }
 
 enum class ImageQuality(val label: String, val maxSide: Int?) {
     ORIGINAL("Original", null), HIGH("High", 2560), BALANCED("Balanced", 1600)
@@ -38,7 +38,7 @@ data class AppSettings(
     val textSize: TextSize = TextSize.MEDIUM,
     val typeface: Typeface = Typeface.MONO,
     val backdrop: Backdrop = Backdrop.DOTS,
-    val windowStyle: WindowStyle = WindowStyle.CLASSIC,
+    val windowStyle: WindowStyle = WindowStyle.FLAT,
     val autoSavePhotos: Boolean = true,
     val autoSaveFiles: Boolean = false,
     val autoCopyText: Boolean = false,

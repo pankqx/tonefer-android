@@ -10,7 +10,10 @@ import androidx.lifecycle.lifecycleScope
 import com.pankqx.tonefer.ToneferApp
 import com.pankqx.tonefer.net.Outgoing
 import com.pankqx.tonefer.net.ToneferClient
+import com.pankqx.tonefer.service.ConnectionService
+import com.pankqx.tonefer.service.Notifications
 import com.pankqx.tonefer.ui.MainActivity
+import com.pankqx.tonefer.util.Hotspot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -42,11 +45,23 @@ class ShareActivity : ComponentActivity() {
         }
 
         val laptop = app.settings.current.pairing?.laptop?.ifBlank { null } ?: "laptop"
-        Toast.makeText(this, "Sending to $laptop…", Toast.LENGTH_SHORT).show()
         app.client.start()
+        if (app.settings.current.background) ConnectionService.start(this)
 
         lifecycleScope.launch {
             val staged = withContext(Dispatchers.IO) { stage(app.client, uris) }
+            // Quick check: is the laptop there? If not, keep the item and open the hotspot switch.
+            if (!app.client.awaitOnline(2_500)) {
+                app.client.queue(text, staged)
+                cleanup()
+                val waiting = app.client.queued.value
+                Notifications.queued(app, waiting)
+                Toast.makeText(app, "Laptop not reachable. Turn on your hotspot and it will be sent automatically.", Toast.LENGTH_LONG).show()
+                Hotspot.open(this@ShareActivity)
+                finish()
+                return@launch
+            }
+            Toast.makeText(app, "Sending to $laptop…", Toast.LENGTH_SHORT).show()
             app.scope.launch {
                 val ok = if (text != null) {
                     if (app.client.sendText(text)) 1 else 0
@@ -58,7 +73,7 @@ class ShareActivity : ComponentActivity() {
                     val msg = when {
                         ok == total && total == 1 -> "Sent to $laptop"
                         ok == total -> "Sent $total items to $laptop"
-                        ok == 0 -> "Couldn't reach your laptop. Is Tonefer running there?"
+                        ok == 0 -> "Laptop dropped out. Queued, will send when it's back."
                         else -> "Sent $ok of $total to $laptop"
                     }
                     Toast.makeText(app, msg, Toast.LENGTH_SHORT).show()

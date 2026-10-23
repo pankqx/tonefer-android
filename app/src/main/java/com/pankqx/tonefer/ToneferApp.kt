@@ -38,6 +38,10 @@ class ToneferApp : Application() {
         settings = SettingsStore(this, scope)
         client = ToneferClient(this, settings, scope)
         client.onIncoming = ::onIncoming
+        client.onQueueDelivered = { n ->
+            val laptop = (client.conn.value as? Conn.Online)?.laptop ?: "laptop"
+            Notifications.delivered(this, n, laptop)
+        }
         Notifications.createChannels(this)
 
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {

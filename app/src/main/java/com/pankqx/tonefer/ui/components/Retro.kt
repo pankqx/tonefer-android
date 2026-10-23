@@ -27,6 +27,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -45,29 +51,35 @@ import com.pankqx.tonefer.R
 import com.pankqx.tonefer.ui.theme.LocalTone
 import com.pankqx.tonefer.ui.theme.ts
 
-val Rule = 1.5.dp
+val Rule = 1.dp
 
-/** Hard offset shadow, the classic-desktop look. Disabled in the "Flat" window style. */
+/** Corner radius: soft rounded boxes by default, square in the "Classic" window style. */
+val com.pankqx.tonefer.ui.theme.Tone.corner: Dp get() = if (classic) 0.dp else 18.dp
+
+@Composable
+fun boxShape(radius: Dp = LocalTone.current.corner): Shape = RoundedCornerShape(radius)
+
+/** Hard offset shadow, only in the "Classic" window style. */
 @Composable
 fun Modifier.hardShadow(offset: Dp = 3.dp): Modifier {
     val tone = LocalTone.current
     if (!tone.classic) return this
     return this.drawBehind {
         val o = offset.toPx()
-        drawRect(tone.shadow, topLeft = Offset(o, o), size = size)
+        drawRect(tone.ink, topLeft = Offset(o, o), size = size)
     }
 }
 
-/** Dotted "desktop" background. */
+/** Page background, optionally with a faint dot grid. */
 @Composable
 fun Modifier.backdrop(): Modifier {
     val tone = LocalTone.current
     return this
         .background(tone.desk)
         .then(if (!tone.dots) Modifier else Modifier.drawBehind {
-            val step = 14.dp.toPx()
-            val r = 0.9.dp.toPx()
-            val c = tone.ink.copy(alpha = 0.14f)
+            val step = 16.dp.toPx()
+            val r = 0.8.dp.toPx()
+            val c = tone.ink.copy(alpha = 0.07f)
             var y = step / 2
             while (y < size.height) {
                 var x = step / 2
@@ -78,45 +90,27 @@ fun Modifier.backdrop(): Modifier {
 }
 
 @Composable
-fun Modifier.ruled(): Modifier = this.border(Rule, LocalTone.current.ink)
-
-/** Pinstriped title bar with a close box, like early desktop windows. */
-@Composable
-fun TitleBar(title: String, onClose: (() -> Unit)? = null) {
+fun Modifier.ruled(shape: Shape = boxShape()): Modifier {
     val tone = LocalTone.current
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(28.dp)
-            .background(tone.paper)
-            .drawBehind {
-                val inset = 8.dp.toPx()
-                val gap = 4.dp.toPx()
-                var y = 6.dp.toPx()
-                repeat(4) {
-                    drawLine(tone.ink, Offset(inset, y), Offset(size.width - inset, y), 1.dp.toPx())
-                    y += gap
-                }
-                drawLine(tone.ink, Offset(0f, size.height - Rule.toPx() / 2), Offset(size.width, size.height - Rule.toPx() / 2), Rule.toPx())
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            Modifier
-                .align(Alignment.CenterStart)
-                .padding(start = 12.dp)
-                .size(14.dp)
-                .background(tone.paper)
-                .border(Rule, tone.ink)
-                .then(if (onClose != null) Modifier.clickable(role = Role.Button, onClick = onClose) else Modifier)
-        )
-        Text(
-            title,
-            modifier = Modifier.background(tone.paper).padding(horizontal = 10.dp),
-            fontSize = ts(12.5f),
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-        )
+    return this.border(Rule, if (tone.classic) tone.ink else tone.line, shape)
+}
+
+/** Window header: a coloured dot and a small uppercase label. */
+@Composable
+fun TitleBar(title: String, onClose: (() -> Unit)? = null, dot: Color = LocalTone.current.danger) {
+    val tone = LocalTone.current
+    Column {
+        Row(
+            Modifier.fillMaxWidth().height(42.dp).padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(9.dp).clip(CircleShape).background(dot))
+            Spacer(Modifier.width(10.dp))
+            Text(title.uppercase(), fontSize = ts(11.5f), letterSpacing = 1.2.sp, fontWeight = FontWeight.Medium,
+                color = tone.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (onClose != null) MiniIcon(R.drawable.ic_close, "Close", tone.muted, onClose)
+        }
+        Box(Modifier.fillMaxWidth().height(Rule).background(if (tone.classic) tone.ink else tone.line))
     }
 }
 
@@ -126,15 +120,18 @@ fun RetroWindow(
     modifier: Modifier = Modifier,
     onClose: (() -> Unit)? = null,
     contentPadding: Dp = 16.dp,
+    dot: Color = LocalTone.current.danger,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val tone = LocalTone.current
-    Column(modifier.hardShadow().background(tone.paper).ruled()) {
-        TitleBar(title, onClose)
+    val shape = boxShape()
+    Column(modifier.hardShadow().clip(shape).background(tone.paper).ruled(shape)) {
+        TitleBar(title, onClose, dot)
         Column(Modifier.padding(contentPadding), content = content)
     }
 }
 
+/** Pill button. Primary = filled teal. */
 @Composable
 fun RetroButton(
     text: String,
@@ -148,27 +145,29 @@ fun RetroButton(
     val tone = LocalTone.current
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
-    val bg = if (primary) tone.ink else tone.paper
-    val fg = when { primary -> tone.paper; danger -> tone.danger; else -> tone.ink }
+    val shape = if (tone.classic) RectangleShape else RoundedCornerShape(50)
+    val fg = when { primary -> tone.accentInk; danger -> tone.danger; else -> tone.ink }.copy(alpha = if (enabled) 1f else .45f)
     Row(
         modifier
-            .offset(if (pressed && tone.classic) 2.dp else 0.dp, if (pressed && tone.classic) 2.dp else 0.dp)
+            .scale(if (pressed) .97f else 1f)
             .then(if (pressed || !enabled) Modifier else Modifier.hardShadow(2.dp))
-            .background(bg)
-            .ruled()
+            .clip(shape)
+            .background(if (primary) tone.accent.copy(alpha = if (enabled) 1f else .45f) else tone.paper)
+            .then(if (primary) Modifier else Modifier.border(Rule, if (tone.classic) tone.ink else tone.ink.copy(alpha = .3f), shape))
             .clickable(source, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 18.dp, vertical = 11.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
-            Icon(painterResource(icon), null, tint = fg.copy(alpha = if (enabled) 1f else .4f), modifier = Modifier.size(17.dp))
+            Icon(painterResource(icon), null, tint = fg, modifier = Modifier.size(17.dp))
             Spacer(Modifier.width(8.dp))
         }
-        Text(text, color = fg.copy(alpha = if (enabled) 1f else .4f), fontWeight = FontWeight.Medium, fontSize = ts(13.5f), maxLines = 1)
+        Text(text, color = fg, fontWeight = FontWeight.Medium, fontSize = ts(13.5f), maxLines = 1)
     }
 }
 
+/** Round icon button. Primary = filled teal. */
 @Composable
 fun IconSquare(
     @DrawableRes icon: Int,
@@ -182,28 +181,29 @@ fun IconSquare(
     val tone = LocalTone.current
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
+    val shape = if (tone.classic) RectangleShape else CircleShape
     Box(
         modifier
             .size(size)
-            .offset(if (pressed && tone.classic) 2.dp else 0.dp, if (pressed && tone.classic) 2.dp else 0.dp)
-            .then(if (pressed || !enabled) Modifier else Modifier.hardShadow(2.dp))
-            .background(if (primary && enabled) tone.ink else tone.paper)
-            .ruled()
+            .scale(if (pressed) .92f else 1f)
+            .clip(shape)
+            .background(if (primary) tone.accent.copy(alpha = if (enabled) 1f else .4f) else tone.soft)
+            .then(if (tone.classic) Modifier.border(Rule, tone.ink, shape) else Modifier)
             .clickable(source, indication = null, enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             painterResource(icon), description,
-            tint = (if (primary && enabled) tone.paper else tone.ink).copy(alpha = if (enabled) 1f else .35f),
+            tint = if (primary) tone.accentInk else tone.ink.copy(alpha = if (enabled) 1f else .35f),
             modifier = Modifier.size(20.dp),
         )
     }
 }
 
-/** Small borderless icon used inside slips. */
+/** Small borderless icon used inside bubbles. */
 @Composable
 fun MiniIcon(@DrawableRes icon: Int, description: String, color: Color, onClick: () -> Unit) {
-    Box(Modifier.size(32.dp).clickable(role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(32.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(painterResource(icon), description, tint = color, modifier = Modifier.size(16.dp))
     }
 }
@@ -211,10 +211,16 @@ fun MiniIcon(@DrawableRes icon: Int, description: String, color: Color, onClick:
 @Composable
 fun StatusLight(on: Boolean, label: String, modifier: Modifier = Modifier) {
     val tone = LocalTone.current
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(9.dp).background(if (on) tone.signal else Color.Transparent).border(Rule, if (on) tone.ink else tone.muted))
+    Row(
+        modifier
+            .clip(RoundedCornerShape(50))
+            .border(Rule, if (on) tone.accent else tone.line, RoundedCornerShape(50))
+            .padding(start = 10.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(if (on) tone.accent else tone.line))
         Spacer(Modifier.width(8.dp))
-        Text(label.uppercase(), fontSize = ts(11f), letterSpacing = 0.9.sp, fontWeight = FontWeight.Medium,
+        Text(label, fontSize = ts(12f), fontWeight = FontWeight.Medium,
             color = if (on) tone.ink else tone.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -225,14 +231,11 @@ fun Label(text: String, modifier: Modifier = Modifier, color: Color = LocalTone.
 }
 
 @Composable
-fun DashedDivider(modifier: Modifier = Modifier, color: Color = LocalTone.current.ink.copy(alpha = .35f)) {
-    Canvas(modifier.fillMaxWidth().height(1.dp)) {
-        drawLine(color, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx(),
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())))
-    }
+fun DashedDivider(modifier: Modifier = Modifier, color: Color = LocalTone.current.line) {
+    Box(modifier.fillMaxWidth().height(1.dp).background(color))
 }
 
-/** Retro checkbox row used throughout Settings. */
+/** Settings checkbox row: a rounded teal check. */
 @Composable
 fun CheckRow(title: String, subtitle: String? = null, checked: Boolean, onChange: (Boolean) -> Unit) {
     val tone = LocalTone.current
@@ -240,17 +243,20 @@ fun CheckRow(title: String, subtitle: String? = null, checked: Boolean, onChange
         Modifier
             .fillMaxWidth()
             .clickable(role = Role.Checkbox) { onChange(!checked) }
-            .padding(vertical = 10.dp),
+            .padding(vertical = 12.dp),
         verticalAlignment = Alignment.Top,
     ) {
+        val shape = if (tone.classic) RectangleShape else RoundedCornerShape(6.dp)
         Box(
-            Modifier.padding(top = 2.dp).size(17.dp).background(if (checked) tone.ink else tone.paper).border(Rule, tone.ink),
+            Modifier.padding(top = 2.dp).size(19.dp).clip(shape)
+                .background(if (checked) tone.accent else Color.Transparent)
+                .border(1.5.dp, if (checked) tone.accent else tone.ink.copy(alpha = .35f), shape),
             contentAlignment = Alignment.Center,
         ) {
             if (checked) Canvas(Modifier.size(11.dp)) {
                 val w = 2.dp.toPx()
-                drawLine(tone.paper, Offset(size.width * .08f, size.height * .55f), Offset(size.width * .4f, size.height * .85f), w, StrokeCap.Square)
-                drawLine(tone.paper, Offset(size.width * .4f, size.height * .85f), Offset(size.width * .95f, size.height * .15f), w, StrokeCap.Square)
+                drawLine(tone.accentInk, Offset(size.width * .08f, size.height * .55f), Offset(size.width * .4f, size.height * .85f), w, StrokeCap.Round)
+                drawLine(tone.accentInk, Offset(size.width * .4f, size.height * .85f), Offset(size.width * .95f, size.height * .15f), w, StrokeCap.Round)
             }
         }
         Spacer(Modifier.width(12.dp))
@@ -261,27 +267,29 @@ fun CheckRow(title: String, subtitle: String? = null, checked: Boolean, onChange
     }
 }
 
-/** Segmented choice: one bordered strip, the selected option inverted. */
+/** Segmented choice: pills, the selected one tinted teal. */
 @Composable
 fun <T> ChoiceRow(title: String, options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit, subtitle: String? = null) {
     val tone = LocalTone.current
-    Column(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
         Text(title, fontWeight = FontWeight.Medium)
         if (subtitle != null) Text(subtitle, color = tone.muted, fontSize = ts(12f), lineHeight = ts(17f))
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth().ruled()) {
-            options.forEachIndexed { i, (value, label) ->
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.forEach { (value, label) ->
                 val on = value == selected
-                if (i > 0) Box(Modifier.width(Rule).height(38.dp).background(tone.ink))
+                val shape = if (tone.classic) RectangleShape else RoundedCornerShape(50)
                 Box(
                     Modifier
                         .weight(1f)
                         .height(38.dp)
-                        .background(if (on) tone.ink else tone.paper)
+                        .clip(shape)
+                        .background(if (on) tone.accentSoft else Color.Transparent)
+                        .border(Rule, if (on) tone.accent else tone.ink.copy(alpha = .25f), shape)
                         .clickable(role = Role.RadioButton) { onSelect(value) },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(label, color = if (on) tone.paper else tone.ink, fontSize = ts(12.5f),
+                    Text(label, color = tone.ink, fontSize = ts(12.5f),
                         fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal, textAlign = TextAlign.Center, maxLines = 1)
                 }
             }
@@ -293,6 +301,7 @@ fun <T> ChoiceRow(title: String, options: List<Pair<T, String>>, selected: T, on
 @Composable
 fun DevicesMark(modifier: Modifier = Modifier, linked: Boolean = true, color: Color = LocalTone.current.ink) {
     val paper = LocalTone.current.paper
+    val LocalToneAccent = LocalTone.current.accent
     Canvas(modifier.size(64.dp, 32.dp)) {
         val u = size.width / 64f
         val stroke = Stroke(2f * u)
@@ -306,7 +315,7 @@ fun DevicesMark(modifier: Modifier = Modifier, linked: Boolean = true, color: Co
         drawLine(color, Offset(33 * u, 25 * u), Offset(63 * u, 25 * u), 2 * u)
         // arrows
         val fx = if (linked) null else PathEffect.dashPathEffect(floatArrayOf(2 * u, 3 * u))
-        val a = if (linked) color else color.copy(alpha = .45f)
+        val a = if (linked) LocalToneAccent else color.copy(alpha = .45f)
         drawLine(a, Offset(19 * u, 11 * u), Offset(32 * u, 11 * u), 2 * u, pathEffect = fx)
         drawLine(a, Offset(29 * u, 8 * u), Offset(32 * u, 11 * u), 2 * u)
         drawLine(a, Offset(29 * u, 14 * u), Offset(32 * u, 11 * u), 2 * u)
@@ -320,8 +329,8 @@ fun DevicesMark(modifier: Modifier = Modifier, linked: Boolean = true, color: Co
 fun Brand(modifier: Modifier = Modifier) {
     val tone = LocalTone.current
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(24.dp).background(tone.ink), contentAlignment = Alignment.Center) {
-            Icon(painterResource(R.drawable.ic_arrows), null, tint = tone.paper, modifier = Modifier.size(15.dp))
+        Box(Modifier.size(26.dp).clip(CircleShape).background(tone.accent), contentAlignment = Alignment.Center) {
+            Icon(painterResource(R.drawable.ic_arrows), null, tint = tone.accentInk, modifier = Modifier.size(14.dp))
         }
         Spacer(Modifier.width(9.dp))
         Text("tonefer", fontWeight = FontWeight.SemiBold, fontSize = ts(16f))

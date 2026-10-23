@@ -89,6 +89,10 @@ import com.pankqx.tonefer.ui.components.ruled
 import com.pankqx.tonefer.ui.theme.LocalTone
 import com.pankqx.tonefer.ui.theme.ts
 import com.pankqx.tonefer.util.Files
+import com.pankqx.tonefer.util.Hotspot
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -105,6 +109,11 @@ fun HomeScreen(app: ToneferApp, onSettings: () -> Unit, onHelp: () -> Unit, onAb
     val conn by app.client.conn.collectAsState()
     val items by app.client.items.collectAsState()
     val uploads by app.client.uploads.collectAsState()
+    val queued by app.client.queued.collectAsState()
+    val speed by app.client.speed.collectAsState()
+    LaunchedEffect(speed) {
+        speed?.let { Toast.makeText(context, "Speed test: ↓ %.1f MB/s · ↑ %.1f MB/s".format(it.down / 1e6, it.up / 1e6), Toast.LENGTH_LONG).show() }
+    }
     var draft by rememberSaveable { mutableStateOf("") }
     var viewing by remember { mutableStateOf<Item?>(null) }
     var menu by remember { mutableStateOf(false) }
@@ -156,17 +165,23 @@ fun HomeScreen(app: ToneferApp, onSettings: () -> Unit, onHelp: () -> Unit, onAb
                     }
                 }
             }
-            Box(Modifier.fillMaxWidth().height(Rule).background(tone.ink))
+            Box(Modifier.fillMaxWidth().height(Rule).background(tone.line))
         }
 
         // ---- connection banner ----
         when (val c = conn) {
             is Conn.Offline, Conn.Searching -> Banner(
                 title = if (c == Conn.Searching) "Looking for your laptop…" else "Can't reach your laptop",
-                text = "Make sure Tonefer is running on the laptop and both are on this phone's hotspot, USB tethering or the same Wi‑Fi.",
-                action = if (c == Conn.Searching) null else ("Retry" to { app.client.reconnect() }),
+                text = (if (queued > 0) "$queued waiting. They'll send by themselves once connected. " else "") +
+                    "Turn on your hotspot (or USB tethering). The laptop joins it automatically after the one-click setup.",
+                onHotspot = { if (!Hotspot.open(context)) Toast.makeText(context, "Open Settings → Hotspot", Toast.LENGTH_SHORT).show() },
+                onRetry = if (c == Conn.Searching) null else ({ app.client.reconnect() }),
             )
-            else -> Unit
+            else -> if (queued > 0) Banner(
+                title = "Sending $queued queued item${if (queued == 1) "" else "s"}…",
+                text = "Delivering what you shared while the laptop was away.",
+                onHotspot = null, onRetry = null,
+            )
         }
 
         // ---- timeline ----
@@ -190,7 +205,10 @@ fun HomeScreen(app: ToneferApp, onSettings: () -> Unit, onHelp: () -> Unit, onAb
         // ---- uploads in flight ----
         uploads.forEach { u ->
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
-                Text("Sending ${u.name}", fontSize = ts(11.5f), color = tone.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Sending ${u.name}", fontSize = ts(11.5f), color = tone.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    if (u.bps > 0) Text("%.1f MB/s".format(u.bps / 1e6), fontSize = ts(11.5f), color = tone.accent, fontWeight = FontWeight.Medium)
+                }
                 Spacer(Modifier.height(4.dp))
                 ProgressBar(u.progress)
             }
@@ -203,8 +221,9 @@ fun HomeScreen(app: ToneferApp, onSettings: () -> Unit, onHelp: () -> Unit, onAb
                 .padding(12.dp)
                 .fillMaxWidth()
                 .hardShadow()
+                .clip(RoundedCornerShape(if (tone.classic) 0.dp else 28.dp))
                 .background(tone.paper)
-                .ruled()
+                .ruled(RoundedCornerShape(if (tone.classic) 0.dp else 28.dp))
                 .padding(6.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
@@ -223,7 +242,7 @@ fun HomeScreen(app: ToneferApp, onSettings: () -> Unit, onHelp: () -> Unit, onAb
                 onValueChange = { draft = it },
                 modifier = Modifier.weight(1f).heightIn(min = 44.dp, max = 150.dp).padding(horizontal = 10.dp, vertical = 11.dp),
                 textStyle = TextStyle(fontFamily = tone.family, fontSize = ts(15f), lineHeight = ts(21f), color = tone.ink),
-                cursorBrush = SolidColor(tone.ink),
+                cursorBrush = SolidColor(tone.accent),
                 decorationBox = { inner ->
                     if (draft.isEmpty()) Text("Note to laptop…", color = tone.muted, fontSize = ts(15f))
                     inner()
@@ -311,7 +330,7 @@ private fun EmptyState(online: Boolean) {
     val tone = LocalTone.current
     Box(Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) {
         Column(
-            Modifier.widthIn(max = 320.dp).background(tone.paper).ruled().padding(24.dp),
+            Modifier.widthIn(max = 320.dp).clip(RoundedCornerShape(if (tone.classic) 0.dp else 18.dp)).background(tone.paper).ruled().padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(if (online) "No transfers yet" else "Waiting for laptop", fontWeight = FontWeight.SemiBold, fontSize = ts(16f))
@@ -333,7 +352,7 @@ private fun Slip(app: ToneferApp, item: Item, onOpenImage: (Item) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val mine = item.fromPhone
-    val bg = if (mine) tone.mine else tone.paper
+    val bg = if (mine) tone.mine else tone.soft
     val fg = if (mine) tone.mineInk else tone.ink
     val sub = if (mine) tone.mineMuted else tone.muted
 
@@ -350,17 +369,20 @@ private fun Slip(app: ToneferApp, item: Item, onOpenImage: (Item) -> Unit) {
             Modifier
                 .then(if (item.isText) Modifier.width(IntrinsicSize.Max) else Modifier.fillMaxWidth())
                 .hardShadow(2.dp)
+                .clip(bubbleShape(mine, tone.classic))
                 .background(bg)
-                .ruled()
-                .padding(if (item.isImage) 6.dp else 12.dp),
+                .then(if (tone.classic) Modifier.ruled(androidx.compose.ui.graphics.RectangleShape) else Modifier)
+                .padding(start = if (item.isImage) 5.dp else 14.dp, end = if (item.isImage) 5.dp else 14.dp,
+                    top = if (item.isImage) 5.dp else 12.dp, bottom = 4.dp),
         ) {
             when {
                 item.isText -> Text(linkified(item.text.orEmpty()), color = fg, fontSize = ts(14.5f), lineHeight = ts(21f))
                 item.isImage -> {
                     val file by produceState<File?>(null, item.id) { value = runCatching { app.client.fileFor(item) }.getOrNull() }
                     Box(
-                        Modifier.fillMaxWidth().heightIn(min = 140.dp, max = 320.dp).border1(fg)
-                            .then(if (file == null) Modifier.dither(tone.soft, tone.paper) else Modifier)
+                        Modifier.fillMaxWidth().heightIn(min = 140.dp, max = 320.dp)
+                            .clip(RoundedCornerShape(if (tone.classic) 0.dp else 14.dp))
+                            .then(if (file == null) Modifier.dither(tone.paper, tone.soft) else Modifier)
                     ) {
                         if (file != null) AsyncImage(
                             model = file, contentDescription = item.name, contentScale = ContentScale.Crop,
@@ -372,8 +394,9 @@ private fun Slip(app: ToneferApp, item: Item, onOpenImage: (Item) -> Unit) {
                 else -> Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickableNoRipple {
                     withFile { Files.open(context, it, item.mime ?: "*/*") }
                 }) {
-                    Box(Modifier.size(40.dp, 48.dp).border1(fg), contentAlignment = Alignment.BottomCenter) {
-                        Text(item.extension, color = fg, fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 6.dp))
+                    Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(if (mine) Color.White.copy(alpha = .16f) else tone.paper),
+                        contentAlignment = Alignment.Center) {
+                        Text(item.extension, color = if (mine) fg else tone.accent, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
@@ -382,7 +405,7 @@ private fun Slip(app: ToneferApp, item: Item, onOpenImage: (Item) -> Unit) {
                     }
                 }
             }
-            DashedRule(sub)
+            Spacer(Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(start = if (item.isImage) 6.dp else 0.dp)) {
                 val who = if (mine) "You" else "Laptop"
                 val time = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(item.ts))
@@ -422,9 +445,10 @@ private fun Modifier.dither(a: Color, b: Color) = this.clipToBounds().background
     }
 }
 
-@Composable
-private fun DashedRule(color: Color) {
-    DashedDivider(Modifier.padding(top = 8.dp, bottom = 2.dp), color.copy(alpha = .5f))
+private fun bubbleShape(mine: Boolean, classic: Boolean) = when {
+    classic -> androidx.compose.ui.graphics.RectangleShape
+    mine -> RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomEnd = 6.dp, bottomStart = 18.dp)
+    else -> RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomEnd = 18.dp, bottomStart = 6.dp)
 }
 
 private fun linkified(text: String) = buildAnnotatedString {
@@ -443,25 +467,28 @@ private fun linkified(text: String) = buildAnnotatedString {
 @Composable
 fun ProgressBar(progress: Float) {
     val tone = LocalTone.current
-    Box(Modifier.fillMaxWidth().height(12.dp).ruled().padding(2.dp)) {
-        Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(8.dp).drawBehind {
-            val seg = 6.dp.toPx(); val gap = 2.dp.toPx()
-            var x = 0f
-            while (x < size.width) { drawRect(tone.ink, Offset(x, 0f), androidx.compose.ui.geometry.Size(minOf(seg, size.width - x), size.height)); x += seg + gap }
-        })
+    Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(6.dp)).background(tone.soft)) {
+        Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(6.dp).clip(RoundedCornerShape(6.dp)).background(tone.accent))
     }
 }
 
 @Composable
-private fun Banner(title: String, text: String, action: Pair<String, () -> Unit>?) {
+private fun Banner(title: String, text: String, onHotspot: (() -> Unit)?, onRetry: (() -> Unit)?) {
     val tone = LocalTone.current
-    Column(Modifier.padding(12.dp).fillMaxWidth().hardShadow(2.dp).background(tone.paper).ruled().padding(12.dp)) {
+    val shape = RoundedCornerShape(if (tone.classic) 0.dp else 16.dp)
+    Column(
+        Modifier.padding(12.dp).fillMaxWidth().hardShadow(2.dp).clip(shape).background(tone.paper)
+            .border(Rule, tone.danger.copy(alpha = .6f), shape).padding(14.dp),
+    ) {
         Text(title, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(2.dp))
         Text(text, color = tone.muted, fontSize = ts(12.5f), lineHeight = ts(18f))
-        if (action != null) {
-            Spacer(Modifier.height(10.dp))
-            RetroButton(action.first, onClick = action.second, icon = R.drawable.ic_refresh)
+        if (onHotspot != null || onRetry != null) {
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (onHotspot != null) RetroButton("Turn on hotspot", primary = true, onClick = onHotspot)
+                if (onRetry != null) RetroButton("Retry", icon = R.drawable.ic_refresh, onClick = onRetry)
+            }
         }
     }
 }
@@ -472,11 +499,11 @@ fun RetroMenu(expanded: Boolean, onDismiss: () -> Unit, content: @Composable () 
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
-        shape = RectangleShape,
+        shape = if (tone.classic) RectangleShape else RoundedCornerShape(14.dp),
         containerColor = tone.paper,
         tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-        border = BorderStroke(Rule, tone.ink),
+        shadowElevation = 6.dp,
+        border = BorderStroke(Rule, if (tone.classic) tone.ink else tone.line),
     ) { content() }
 }
 

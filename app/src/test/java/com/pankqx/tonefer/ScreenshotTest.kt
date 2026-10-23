@@ -17,6 +17,7 @@ import com.pankqx.tonefer.net.Conn
 import com.pankqx.tonefer.ui.screens.AboutScreen
 import com.pankqx.tonefer.ui.screens.HomeScreen
 import com.pankqx.tonefer.ui.screens.InstructionsScreen
+import com.pankqx.tonefer.ui.screens.LoadingScreen
 import com.pankqx.tonefer.ui.screens.PairScreen
 import com.pankqx.tonefer.ui.screens.SettingsScreen
 import com.pankqx.tonefer.ui.theme.ToneferTheme
@@ -77,10 +78,10 @@ class ScreenshotTest {
         shot("04-home-offline") { HomeScreen(app, {}, {}, {}) }
     }
 
-    @Test fun homeFlatSans() {
+    @Test fun homeClassicSans() {
         pair()
         app.client.preview(sample, Conn.Online("10.42.0.15", "dell-g15"))
-        shot("05-home-flat-sans", app.settings.current.copy(windowStyle = WindowStyle.FLAT, typeface = Typeface.SANS)) { HomeScreen(app, {}, {}, {}) }
+        shot("05-home-classic-sans", app.settings.current.copy(windowStyle = WindowStyle.CLASSIC, typeface = Typeface.SANS)) { HomeScreen(app, {}, {}, {}) }
     }
 
     @Test fun settings() {
@@ -92,4 +93,12 @@ class ScreenshotTest {
     @Test fun instructions() = shot("07-instructions") { InstructionsScreen {} }
 
     @Test fun about() = shot("08-about") { AboutScreen {} }
+
+    @Test fun loading() = shot("00-loading") { LoadingScreen(animate = false) }
+
+    @Test fun homeQueued() {
+        pair()
+        app.client.preview(emptyList(), Conn.Searching)
+        shot("09-home-searching-dark", app.settings.current.copy(theme = ThemeMode.DARK)) { HomeScreen(app, {}, {}, {}) }
+    }
 }

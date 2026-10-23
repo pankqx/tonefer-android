@@ -19,6 +19,8 @@ import com.pankqx.tonefer.net.Conn
 import com.pankqx.tonefer.ui.screens.AboutScreen
 import com.pankqx.tonefer.ui.screens.HomeScreen
 import com.pankqx.tonefer.ui.screens.InstructionsScreen
+import com.pankqx.tonefer.ui.screens.LOADING_MS
+import com.pankqx.tonefer.ui.screens.LoadingScreen
 import com.pankqx.tonefer.ui.screens.PairScreen
 import com.pankqx.tonefer.ui.screens.SettingsScreen
 import com.pankqx.tonefer.ui.theme.LocalTone
@@ -52,6 +54,12 @@ private fun Root(app: ToneferApp) {
     val conn by app.client.conn.collectAsState()
     var screen by rememberSaveable { mutableStateOf(Screen.HOME) }
     var help by rememberSaveable { mutableStateOf(false) }
+    var booting by rememberSaveable { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(LOADING_MS.toLong())
+        booting = false
+    }
+    if (booting) { LoadingScreen(); return }
 
     BackHandler(enabled = screen != Screen.HOME || help) {
         if (help) help = false else screen = if (screen == Screen.ABOUT) Screen.SETTINGS else Screen.HOME
