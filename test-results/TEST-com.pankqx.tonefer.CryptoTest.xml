@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.pankqx.tonefer.CryptoTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-23T19:56:55" hostname="runnervm8k3b6" time="0.15">
+  <properties/>
+  <testcase name="sealMatchesPyNaCl" classname="com.pankqx.tonefer.CryptoTest" time="0.049"/>
+  <testcase name="parsesPairingLinks" classname="com.pankqx.tonefer.CryptoTest" time="0.028"/>
+  <testcase name="tokenMatchesLaptop" classname="com.pankqx.tonefer.CryptoTest" time="0.007"/>
+  <testcase name="randomRoundTrip" classname="com.pankqx.tonefer.CryptoTest" time="0.052"/>
+  <testcase name="openMatchesPyNaCl" classname="com.pankqx.tonefer.CryptoTest" time="0.005"/>
+  <testcase name="tamperedDataIsRejected" classname="com.pankqx.tonefer.CryptoTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

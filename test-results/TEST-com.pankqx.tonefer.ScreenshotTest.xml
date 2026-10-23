@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.pankqx.tonefer.ScreenshotTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-10-23T19:56:56" hostname="runnervm8k3b6" time="21.98">
+  <properties/>
+  <testcase name="homeOffline" classname="com.pankqx.tonefer.ScreenshotTest" time="18.123"/>
+  <testcase name="pairing" classname="com.pankqx.tonefer.ScreenshotTest" time="0.648"/>
+  <testcase name="homeDark" classname="com.pankqx.tonefer.ScreenshotTest" time="1.01"/>
+  <testcase name="home" classname="com.pankqx.tonefer.ScreenshotTest" time="0.52"/>
+  <testcase name="about" classname="com.pankqx.tonefer.ScreenshotTest" time="0.322"/>
+  <testcase name="loading" classname="com.pankqx.tonefer.ScreenshotTest" time="0.216"/>
+  <testcase name="instructions" classname="com.pankqx.tonefer.ScreenshotTest" time="0.293"/>
+  <testcase name="homeQueued" classname="com.pankqx.tonefer.ScreenshotTest" time="0.25"/>
+  <testcase name="settings" classname="com.pankqx.tonefer.ScreenshotTest" time="0.314"/>
+  <testcase name="homeClassicSans" classname="com.pankqx.tonefer.ScreenshotTest" time="0.279"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
