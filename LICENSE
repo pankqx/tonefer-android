@@ -1,0 +1,9 @@
+Copyright (c) 2026 Pank. All rights reserved.
+
+This software and its source code are proprietary. No part of it may be copied,
+modified, distributed, sublicensed or sold without the prior written permission
+of the copyright holder.
+
+Third-party components included in this application are distributed under their
+own licenses: IBM Plex Mono (SIL Open Font License 1.1, see licenses/), OkHttp,
+Coil, ZXing Android Embedded, AndroidX and Jetpack Compose (Apache License 2.0).
