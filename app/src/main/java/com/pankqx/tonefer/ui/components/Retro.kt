@@ -327,3 +327,7 @@ fun Brand(modifier: Modifier = Modifier) {
         Text("tonefer", fontWeight = FontWeight.SemiBold, fontSize = ts(16f))
     }
 }
+
+@Composable
+fun Modifier.clickableNoRipple(onClick: () -> Unit): Modifier =
+    this.clickable(remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClick = onClick)
