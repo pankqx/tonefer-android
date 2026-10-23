@@ -46,6 +46,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -412,7 +413,7 @@ private fun Modifier.border1(color: Color) = this.then(Modifier.drawBehind {
     drawRect(color, style = androidx.compose.ui.graphics.drawscope.Stroke(w))
 })
 
-private fun Modifier.dither(a: Color, b: Color) = this.background(a).drawBehind {
+private fun Modifier.dither(a: Color, b: Color) = this.clipToBounds().background(a).drawBehind {
     val step = 6.dp.toPx()
     var x = -size.height
     while (x < size.width) {
