@@ -54,7 +54,8 @@ import com.pankqx.tonefer.ui.theme.ts
 val Rule = 1.dp
 
 /** Corner radius: soft rounded boxes by default, square in the "Classic" window style. */
-val com.pankqx.tonefer.ui.theme.Tone.corner: Dp get() = if (classic) 0.dp else 18.dp
+/** Sharp corners everywhere (only the top bar keeps its rounded status pill and logo). */
+val com.pankqx.tonefer.ui.theme.Tone.corner: Dp get() = 0.dp
 
 @Composable
 fun boxShape(radius: Dp = LocalTone.current.corner): Shape = RoundedCornerShape(radius)
@@ -104,7 +105,7 @@ fun TitleBar(title: String, onClose: (() -> Unit)? = null, dot: Color = LocalTon
             Modifier.fillMaxWidth().height(42.dp).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.size(9.dp).clip(CircleShape).background(dot))
+            Box(Modifier.size(9.dp).background(dot))
             Spacer(Modifier.width(10.dp))
             Text(title.uppercase(), fontSize = ts(11.5f), letterSpacing = 1.2.sp, fontWeight = FontWeight.Medium,
                 color = tone.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
@@ -145,7 +146,7 @@ fun RetroButton(
     val tone = LocalTone.current
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
-    val shape = if (tone.classic) RectangleShape else RoundedCornerShape(50)
+    val shape = RectangleShape
     val fg = when { primary -> tone.accentInk; danger -> tone.danger; else -> tone.ink }.copy(alpha = if (enabled) 1f else .45f)
     Row(
         modifier
@@ -181,7 +182,7 @@ fun IconSquare(
     val tone = LocalTone.current
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
-    val shape = if (tone.classic) RectangleShape else CircleShape
+    val shape = RectangleShape
     Box(
         modifier
             .size(size)
@@ -203,7 +204,7 @@ fun IconSquare(
 /** Small borderless icon used inside bubbles. */
 @Composable
 fun MiniIcon(@DrawableRes icon: Int, description: String, color: Color, onClick: () -> Unit) {
-    Box(Modifier.size(32.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(32.dp).clickable(role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(painterResource(icon), description, tint = color, modifier = Modifier.size(16.dp))
     }
 }
@@ -246,7 +247,7 @@ fun CheckRow(title: String, subtitle: String? = null, checked: Boolean, onChange
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        val shape = if (tone.classic) RectangleShape else RoundedCornerShape(6.dp)
+        val shape = RectangleShape
         Box(
             Modifier.padding(top = 2.dp).size(19.dp).clip(shape)
                 .background(if (checked) tone.accent else Color.Transparent)
@@ -278,7 +279,7 @@ fun <T> ChoiceRow(title: String, options: List<Pair<T, String>>, selected: T, on
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             options.forEach { (value, label) ->
                 val on = value == selected
-                val shape = if (tone.classic) RectangleShape else RoundedCornerShape(50)
+                val shape = RectangleShape
                 Box(
                     Modifier
                         .weight(1f)

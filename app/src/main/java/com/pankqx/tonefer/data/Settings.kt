@@ -26,7 +26,7 @@ enum class Typeface(val label: String) { MONO("Mono"), SANS("Sans") }
 
 enum class Backdrop(val label: String) { DOTS("Dotted"), PLAIN("Plain") }
 
-enum class WindowStyle(val label: String) { FLAT("Soft"), CLASSIC("Classic") }
+enum class WindowStyle(val label: String) { FLAT("Flat"), CLASSIC("Classic") }
 
 enum class ImageQuality(val label: String, val maxSide: Int?) {
     ORIGINAL("Original", null), HIGH("High", 2560), BALANCED("Balanced", 1600)

@@ -75,8 +75,8 @@ fun LoadingScreen(animate: Boolean = true) {
             Spacer(Modifier.height(18.dp))
             Text("tonefer", fontWeight = FontWeight.SemiBold, fontSize = ts(20f))
             Spacer(Modifier.height(18.dp))
-            Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(4.dp)).background(tone.soft)) {
-                Box(Modifier.fillMaxWidth(progress.value).height(4.dp).clip(RoundedCornerShape(4.dp)).background(tone.accent))
+            Box(Modifier.fillMaxWidth().height(4.dp).background(tone.soft)) {
+                Box(Modifier.fillMaxWidth(progress.value).height(4.dp).background(tone.accent))
             }
             Spacer(Modifier.height(14.dp))
             Text(steps[step].uppercase(), color = tone.muted, fontSize = ts(11.5f), letterSpacing = 1.2.sp)

@@ -221,9 +221,9 @@ fun HomeScreen(app: ToneferApp, onSettings: () -> Unit, onHelp: () -> Unit, onAb
                 .padding(12.dp)
                 .fillMaxWidth()
                 .hardShadow()
-                .clip(RoundedCornerShape(if (tone.classic) 0.dp else 28.dp))
+                .clip(RectangleShape)
                 .background(tone.paper)
-                .ruled(RoundedCornerShape(if (tone.classic) 0.dp else 28.dp))
+                .ruled(RectangleShape)
                 .padding(6.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
@@ -330,7 +330,7 @@ private fun EmptyState(online: Boolean) {
     val tone = LocalTone.current
     Box(Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) {
         Column(
-            Modifier.widthIn(max = 320.dp).clip(RoundedCornerShape(if (tone.classic) 0.dp else 18.dp)).background(tone.paper).ruled().padding(24.dp),
+            Modifier.widthIn(max = 320.dp).clip(RectangleShape).background(tone.paper).ruled().padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(if (online) "No transfers yet" else "Waiting for laptop", fontWeight = FontWeight.SemiBold, fontSize = ts(16f))
@@ -381,7 +381,7 @@ private fun Slip(app: ToneferApp, item: Item, onOpenImage: (Item) -> Unit) {
                     val file by produceState<File?>(null, item.id) { value = runCatching { app.client.fileFor(item) }.getOrNull() }
                     Box(
                         Modifier.fillMaxWidth().heightIn(min = 140.dp, max = 320.dp)
-                            .clip(RoundedCornerShape(if (tone.classic) 0.dp else 14.dp))
+                            .clip(RectangleShape)
                             .then(if (file == null) Modifier.dither(tone.paper, tone.soft) else Modifier)
                     ) {
                         if (file != null) AsyncImage(
@@ -394,7 +394,7 @@ private fun Slip(app: ToneferApp, item: Item, onOpenImage: (Item) -> Unit) {
                 else -> Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickableNoRipple {
                     withFile { Files.open(context, it, item.mime ?: "*/*") }
                 }) {
-                    Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(if (mine) Color.White.copy(alpha = .16f) else tone.paper),
+                    Box(Modifier.size(44.dp).background(if (mine) Color.White.copy(alpha = .16f) else tone.paper),
                         contentAlignment = Alignment.Center) {
                         Text(item.extension, color = if (mine) fg else tone.accent, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                     }
@@ -447,8 +447,7 @@ private fun Modifier.dither(a: Color, b: Color) = this.clipToBounds().background
 
 private fun bubbleShape(mine: Boolean, classic: Boolean) = when {
     classic -> androidx.compose.ui.graphics.RectangleShape
-    mine -> RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomEnd = 6.dp, bottomStart = 18.dp)
-    else -> RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomEnd = 18.dp, bottomStart = 6.dp)
+    else -> androidx.compose.ui.graphics.RectangleShape
 }
 
 private fun linkified(text: String) = buildAnnotatedString {
@@ -467,15 +466,15 @@ private fun linkified(text: String) = buildAnnotatedString {
 @Composable
 fun ProgressBar(progress: Float) {
     val tone = LocalTone.current
-    Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(6.dp)).background(tone.soft)) {
-        Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(6.dp).clip(RoundedCornerShape(6.dp)).background(tone.accent))
+    Box(Modifier.fillMaxWidth().height(6.dp).background(tone.soft)) {
+        Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(6.dp).background(tone.accent))
     }
 }
 
 @Composable
 private fun Banner(title: String, text: String, onHotspot: (() -> Unit)?, onRetry: (() -> Unit)?) {
     val tone = LocalTone.current
-    val shape = RoundedCornerShape(if (tone.classic) 0.dp else 16.dp)
+    val shape = RectangleShape
     Column(
         Modifier.padding(12.dp).fillMaxWidth().hardShadow(2.dp).clip(shape).background(tone.paper)
             .border(Rule, tone.danger.copy(alpha = .6f), shape).padding(14.dp),
@@ -499,7 +498,7 @@ fun RetroMenu(expanded: Boolean, onDismiss: () -> Unit, content: @Composable () 
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
-        shape = if (tone.classic) RectangleShape else RoundedCornerShape(14.dp),
+        shape = RectangleShape,
         containerColor = tone.paper,
         tonalElevation = 0.dp,
         shadowElevation = 6.dp,

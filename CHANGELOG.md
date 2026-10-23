@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1 — October 2026
+
+- Sharp, square corners everywhere. Only the top bar keeps its rounded status pill and logo.
+
 ## 1.1.0 — October 2026
 
 - New calmer look: soft rounded windows, filled message bubbles, teal and coral accents
