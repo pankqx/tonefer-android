@@ -68,7 +68,7 @@ fun SubScreen(title: String, onBack: () -> Unit, content: @Composable ColumnScop
                 Spacer(Modifier.width(6.dp))
                 Text(title, fontWeight = FontWeight.SemiBold, fontSize = ts(16f))
             }
-            Box(Modifier.fillMaxWidth().height(Rule).background(tone.ink))
+            Box(Modifier.fillMaxWidth().height(Rule).background(tone.line))
         }
         Column(
             Modifier
