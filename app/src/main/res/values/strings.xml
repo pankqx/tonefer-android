@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Tonefer</string>
+    <string name="share_label">Tonefer</string>
+    <string name="channel_transfers">Transfers</string>
+    <string name="channel_transfers_desc">Notes, photos and files from your laptop</string>
+    <string name="channel_connection">Connection</string>
+    <string name="channel_connection_desc">Keeps Tonefer connected to your laptop in the background</string>
+</resources>
