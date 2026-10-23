@@ -6,6 +6,12 @@
 
 The Android companion to [Tonefer](https://github.com/pankqx/tonefer). Share notes, photos and files to your laptop in one tap, end-to-end encrypted, over your own hotspot, USB cable or Wi‑Fi.
 
+<p>
+  <img src="docs/screenshots/02-home.png" width="230" alt="Timeline">
+  <img src="docs/screenshots/01-pair.png" width="230" alt="Pairing">
+  <img src="docs/screenshots/06-settings.png" width="230" alt="Settings">
+</p>
+
 </div>
 
 ---
