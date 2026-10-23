@@ -202,6 +202,13 @@ class ToneferClient(
         return withTimeoutOrNull(timeoutMs) { conn.first { it is Conn.Online } } != null
     }
 
+    /** Shows fixed data without a laptop. Used by screenshot tests and previews only. */
+    @androidx.annotation.VisibleForTesting
+    fun preview(items: List<Item>, conn: Conn) {
+        _items.value = items
+        _conn.value = conn
+    }
+
     // ------------------------------------------------------------------ sending
 
     suspend fun sendText(text: String): Boolean {

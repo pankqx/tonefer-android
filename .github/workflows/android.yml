@@ -50,10 +50,24 @@ jobs:
           TONEFER_KEYSTORE_PASSWORD: ${{ secrets.TONEFER_KEYSTORE_PASSWORD }}
           TONEFER_KEY_ALIAS: ${{ secrets.TONEFER_KEY_ALIAS }}
           TONEFER_KEY_PASSWORD: ${{ secrets.TONEFER_KEY_PASSWORD }}
-        run: ./gradlew --no-daemon --stacktrace testDebugUnitTest assembleRelease
+        run: ./gradlew --no-daemon --stacktrace recordRoborazziDebug assembleRelease
 
       - name: Collect APK
         run: cp app/build/outputs/apk/release/app-release.apk "tonefer-${VERSION_NAME}.apk"
+
+      # Screenshots, the APK and test results go to the ci-output branch for review.
+      - name: Publish CI output
+        if: always() && github.event_name != 'pull_request'
+        run: |
+          mkdir -p ci-out
+          cp -r app/screenshots ci-out/ 2>/dev/null || true
+          cp tonefer-*.apk ci-out/ 2>/dev/null || true
+          cp -r app/build/test-results/testDebugUnitTest ci-out/test-results 2>/dev/null || true
+          cd ci-out
+          echo "run ${{ github.run_number }} · ${{ github.sha }} · ${{ job.status }}" > STATUS.txt
+          git init -q && git checkout -q -b ci-output && git add -A
+          git -c user.name=pankqx -c user.email=pankqx@gmail.com commit -qm "CI output for run ${{ github.run_number }}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" ci-output
 
       - uses: actions/upload-artifact@v4
         with:

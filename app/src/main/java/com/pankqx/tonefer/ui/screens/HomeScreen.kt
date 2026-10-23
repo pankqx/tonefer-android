@@ -113,7 +113,7 @@ fun HomeScreen(app: ToneferApp, onSettings: () -> Unit, onHelp: () -> Unit, onAb
     // Ask once for notification permission (Android 13+).
     val notifPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= 33 &&
+        if (Build.VERSION.SDK_INT >= 33 && Build.FINGERPRINT != "robolectric" &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
