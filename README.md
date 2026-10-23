@@ -24,7 +24,7 @@ The Android companion to [Tonefer](https://github.com/pankqx/tonefer). Share not
 
 ## Install
 
-1. Download the latest **`tonefer-x.y.z.apk`** from [Releases](../../releases).
+1. Download **[tonefer.apk](https://github.com/pankqx/tonefer-android/releases/latest/download/tonefer.apk)** (latest release).
 2. Open it on your phone and allow *Install unknown apps* for your browser or file manager when asked.
 3. Open **Tonefer → Scan pairing code**, and scan the code shown by Tonefer on your laptop.
 
@@ -61,7 +61,7 @@ The wire protocol is documented in [tonefer/docs/PROTOCOL.md](https://github.com
 ./gradlew testDebugUnitTest assembleRelease
 ```
 
-JDK 17 and the Android SDK (API 35) are required. Every push is built and tested by GitHub Actions, and tags `v*` publish a release with the APK.
+JDK 17 and the Android SDK (API 35) are required. Every push is built and tested by GitHub Actions. Builds of `main` publish the release named in `VERSION` with the APK attached. Bump `VERSION` to start a new release.
 
 ### Release signing
 
