@@ -135,7 +135,7 @@ fun SettingsScreen(app: ToneferApp, onBack: () -> Unit, onAbout: () -> Unit) {
         RetroWindow("Connection", Modifier.fillMaxWidth()) {
             CheckRow(
                 "Stay connected in background",
-                "Receive while the app is closed. Shows a small persistent notification, as Android requires.",
+                "Receive while the app is closed and the laptop is nearby. Stops looking about a minute after the laptop leaves; sharing to Tonefer starts it again.",
                 s.background,
             ) { v -> set { it.copy(background = v) } }
             DashedDivider()

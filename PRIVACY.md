@@ -31,4 +31,4 @@ Tonefer moves notes, photos and files between your phone and your own laptop. It
 
 ## Contact
 
-Questions: open an issue on the project's GitHub repository.
+Tonefer is developed and owned by K S Pankaj. Questions: open an issue on the project's GitHub repository.

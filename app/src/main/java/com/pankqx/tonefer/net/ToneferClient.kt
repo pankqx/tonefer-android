@@ -98,6 +98,19 @@ class ToneferClient(
     /** Called after queued items were delivered. */
     var onQueueDelivered: ((Int) -> Unit)? = null
 
+    /**
+     * Whether to keep looking for the laptop for as long as it takes (true while the app is
+     * on screen). When false, the search stops on its own: [IDLE_MS] after the laptop left,
+     * or [QUEUE_WINDOW_MS] if something is still waiting to be sent.
+     */
+    var keepSearching: () -> Boolean = { true }
+
+    /** Called when the client stopped looking by itself. Receives the number of items still queued. */
+    var onIdle: ((Int) -> Unit)? = null
+
+    /** When the laptop was last lost (0 while connected or not yet looked for). */
+    @Volatile private var awaySince = 0L
+
     private val queueDir get() = File(context.filesDir, "queue").apply { mkdirs() }
     private val flushLock = kotlinx.coroutines.sync.Mutex()
 
@@ -131,16 +144,34 @@ class ToneferClient(
         start()
     }
 
+    /** True when it's time to stop searching in the background. */
+    private fun shouldRest(): Boolean {
+        if (keepSearching()) { awaySince = 0L; return false }
+        val now = System.currentTimeMillis()
+        if (awaySince == 0L) { awaySince = now; return false }
+        val window = if (_queued.value > 0) QUEUE_WINDOW_MS else IDLE_MS
+        return now - awaySince > window
+    }
+
+    /** Stops the loop quietly; [start] (opening the app or sharing) resumes it. */
+    private fun rest(state: Conn = Conn.Idle) {
+        _conn.value = state
+        awaySince = 0L
+        onIdle?.invoke(_queued.value)
+    }
+
     private suspend fun runLoop() {
         var backoff = 1500L
+        awaySince = 0L
         while (currentCoroutineContext().isActive) {
             val pairing = settings.current.pairing ?: run { _conn.value = Conn.Idle; return }
+            if (shouldRest()) { rest(); return }
             var host = pairing.host
             _conn.value = Conn.Connecting(host)
 
             when (discovery.ping(host, pairing)) {
                 200 -> Unit
-                401 -> { _conn.value = Conn.Unpaired; return }
+                401 -> { rest(Conn.Unpaired); return }
                 else -> {
                     _conn.value = Conn.Searching
                     when (val r = discovery.find(pairing)) {
@@ -148,7 +179,7 @@ class ToneferClient(
                             host = r.host
                             settings.update { s -> s.copy(pairing = s.pairing?.copy(host = host)) }
                         }
-                        Discovery.Result.Unauthorized -> { _conn.value = Conn.Unpaired; return }
+                        Discovery.Result.Unauthorized -> { rest(Conn.Unpaired); return }
                         Discovery.Result.NotFound -> {
                             _conn.value = Conn.Offline("Laptop not found")
                             delay(backoff)
@@ -161,7 +192,7 @@ class ToneferClient(
             }
 
             val code = runSocket(pairing.copy(host = host))
-            if (code == 4001 || code == 1008) { _conn.value = Conn.Unpaired; return }
+            if (code == 4001 || code == 1008) { rest(Conn.Unpaired); return }
             backoff = 1500L
             _conn.value = Conn.Offline("Connection lost")
             delay(1200)
@@ -201,6 +232,7 @@ class ToneferClient(
                 val list = buildList { if (arr != null) for (i in 0 until arr.length()) add(Item.from(arr.getJSONObject(i))) }
                 _items.value = list
                 val laptop = msg.optString("host", "Laptop")
+                awaySince = 0L
                 _conn.value = Conn.Online(p.host, laptop)
                 if (_queued.value > 0) scope.launch(Dispatchers.IO) { flushQueue() }
                 if (laptop != p.laptop) scope.launch {
@@ -470,6 +502,12 @@ class ToneferClient(
     companion object {
         private const val CHUNK = 64 * 1024
         private const val MAX_BYTES = 400 * 1024 * 1024
+
+        /** Background search time after the laptop leaves, with nothing to send. */
+        const val IDLE_MS = 60_000L
+
+        /** Background search time while shared items are waiting for the laptop. */
+        const val QUEUE_WINDOW_MS = 10 * 60_000L
 
         fun safeName(name: String): String =
             name.substringAfterLast('/').replace(Regex("""[\\:*?"<>|\u0000-\u001f]"""), "_").take(150).ifBlank { "file" }

@@ -11,7 +11,6 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.pankqx.tonefer.R
 import com.pankqx.tonefer.data.Item
-import com.pankqx.tonefer.net.Conn
 import com.pankqx.tonefer.ui.MainActivity
 import com.pankqx.tonefer.util.Files
 
@@ -48,34 +47,59 @@ object Notifications {
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 
-    fun service(context: Context, conn: Conn) = NotificationCompat.Builder(context, CH_CONNECTION)
-        .setSmallIcon(R.drawable.ic_stat_tonefer)
-        .setContentTitle(when (conn) {
-            is Conn.Online -> "Connected to ${conn.laptop}"
-            Conn.Searching -> "Looking for your laptop…"
-            is Conn.Connecting -> "Connecting…"
-            Conn.Unpaired -> "Not paired"
-            else -> "Waiting for your laptop"
-        })
-        .setContentText("Tap to open Tonefer")
-        .setContentIntent(openApp(context))
-        .setOngoing(true)
-        .setSilent(true)
-        .setPriority(NotificationCompat.PRIORITY_MIN)
-        .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-        .build()
+    /** What the background notification shows: the laptop if connected, and anything waiting to go. */
+    data class Status(val laptop: String?, val queued: Int)
 
-    /** "Waiting for your laptop" with a one-tap hotspot shortcut. */
-    fun queued(context: Context, count: Int) {
+    private fun items(n: Int) = if (n == 1) "1 item" else "$n items"
+
+    fun service(context: Context, status: Status): android.app.Notification {
+        val b = NotificationCompat.Builder(context, CH_CONNECTION)
+            .setSmallIcon(R.drawable.ic_stat_tonefer)
+            .setContentIntent(openApp(context))
+            .setOngoing(true)
+            .setSilent(true)
+            .setOnlyAlertOnce(true)
+            .setShowWhen(false)
+            .setLocalOnly(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_DEFERRED)
+        when {
+            status.laptop != null && status.queued > 0 ->
+                b.setContentTitle("Sending ${items(status.queued)} to ${status.laptop}")
+            status.laptop != null ->
+                b.setContentTitle("Connected to ${status.laptop}").setContentText("Notes and photos from the laptop arrive here")
+            status.queued > 0 -> {
+                val hotspot = PendingIntent.getActivity(context, 7, com.pankqx.tonefer.util.Hotspot.intent(),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+                b.setContentTitle("${items(status.queued)} waiting for your laptop")
+                    .setContentText("Sends as soon as the laptop joins your hotspot")
+                    .addAction(R.drawable.ic_link, "Turn on hotspot", hotspot)
+            }
+            else -> b.setContentTitle("Tonefer").setContentText("Ready to send")
+        }
+        return b.build()
+    }
+
+    /**
+     * Items waiting for the laptop, with a one-tap hotspot shortcut. Used when the background
+     * connection is off, and when the background search ended with items still waiting ([gaveUp]).
+     */
+    fun queued(context: Context, count: Int, gaveUp: Boolean = false) {
         val nm = NotificationManagerCompat.from(context)
         if (!nm.areNotificationsEnabled()) return
         val hotspot = PendingIntent.getActivity(context, 7, com.pankqx.tonefer.util.Hotspot.intent(),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val n = NotificationCompat.Builder(context, CH_TRANSFERS_QUIET)
             .setSmallIcon(R.drawable.ic_stat_tonefer)
-            .setContentTitle(if (count == 1) "1 item waiting for your laptop" else "$count items waiting for your laptop")
-            .setContentText("Turn on your hotspot. Tonefer sends it as soon as the laptop connects.")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("Turn on your hotspot. Tonefer sends it as soon as the laptop connects."))
+            .setContentTitle("${items(count)} waiting for your laptop")
+            .let {
+                val text = if (gaveUp) "Turn on your hotspot, then open Tonefer or share again to send."
+                else "Turn on your hotspot. Tonefer sends it as soon as the laptop connects."
+                it.setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            }
+            .setSilent(true)
+            .setShowWhen(false)
             .setContentIntent(openApp(context))
             .addAction(R.drawable.ic_link, "Turn on hotspot", hotspot)
             .setOngoing(false)

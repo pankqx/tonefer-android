@@ -54,8 +54,8 @@ class ShareActivity : ComponentActivity() {
             if (!app.client.awaitOnline(2_500)) {
                 app.client.queue(text, staged)
                 cleanup()
-                val waiting = app.client.queued.value
-                Notifications.queued(app, waiting)
+                // With the background connection on, its notification already shows what's waiting.
+                if (!app.settings.current.background) Notifications.queued(app, app.client.queued.value)
                 Toast.makeText(app, "Laptop not reachable. Turn on your hotspot and it will be sent automatically.", Toast.LENGTH_LONG).show()
                 Hotspot.open(this@ShareActivity)
                 finish()

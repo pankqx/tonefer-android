@@ -89,6 +89,10 @@ fun AboutScreen(onBack: () -> Unit) {
             Text("Version $version", color = tone.muted, fontSize = ts(12.5f))
             Spacer(Modifier.height(12.dp))
             Text("Private, offline transfer between your phone and your laptop.", fontSize = ts(13.5f))
+            Spacer(Modifier.height(14.dp))
+            Label("Developed & owned by")
+            Spacer(Modifier.height(2.dp))
+            Text("K S Pankaj", fontWeight = FontWeight.SemiBold, fontSize = ts(15f))
         }
         RetroWindow("Privacy", Modifier.fillMaxWidth()) {
             Rows(
@@ -106,7 +110,7 @@ fun AboutScreen(onBack: () -> Unit) {
             )
             Spacer(Modifier.height(14.dp))
             Row {
-                Text("© 2026 Pank. All rights reserved.", color = tone.muted, fontSize = ts(12f))
+                Text("© 2026 K S Pankaj. All rights reserved.", color = tone.muted, fontSize = ts(12f))
                 Spacer(Modifier.width(4.dp))
             }
         }

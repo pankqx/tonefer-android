@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0 — November 2026
+
+- New start-up animation built around speed: packets race from phone to laptop over a warp field that keeps accelerating, a live percentage meter, and a hyperjump into the app after five seconds
+- "Developed & owned by K S Pankaj" on the start-up screen and in About
+- Quieter background connection: no more "looking for your laptop" notification popping up. The notification only changes when the laptop connects, leaves or something is waiting to be sent
+- Searching now happens around real use: opening Tonefer or sharing to it starts it, and it winds down about a minute after the laptop leaves (ten minutes when something is still waiting to be sent)
+- Android no longer restarts the background connection on its own after closing it
+
 ## 1.2.0 — October 2026
 
 - **Connect again** and **Scan pairing code again** in the menu and on the offline banner

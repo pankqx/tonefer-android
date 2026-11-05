@@ -4,6 +4,8 @@
 
 **Private, offline transfer between your phone and your laptop.**
 
+Developed and owned by **K S Pankaj**
+
 The Android companion to [Tonefer](https://github.com/pankqx/tonefer). Share notes, photos and files to your laptop in one tap, end-to-end encrypted, over your own hotspot, USB cable or Wi‑Fi.
 
 <p>
@@ -88,4 +90,4 @@ Tonefer has no servers, accounts, analytics, ads or crash reporting. See [PRIVAC
 
 ---
 
-<sub>© 2026 Pank. All rights reserved. Third-party components are listed in the app under About → Credits.</sub>
+<sub>Developed and owned by <b>K S Pankaj</b>. © 2026 K S Pankaj. All rights reserved. Third-party components are listed in the app under About → Credits.</sub>

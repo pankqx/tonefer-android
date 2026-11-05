@@ -96,6 +96,10 @@ class ScreenshotTest {
 
     @Test fun loading() = shot("00-loading") { LoadingScreen(animate = false) }
 
+    @Test fun loadingDark() = shot("00-loading-dark", app.settings.current.copy(theme = ThemeMode.DARK)) {
+        LoadingScreen(animate = false, frozenAtMs = 4_100f)
+    }
+
     @Test fun homeQueued() {
         pair()
         app.client.preview(emptyList(), Conn.Searching)

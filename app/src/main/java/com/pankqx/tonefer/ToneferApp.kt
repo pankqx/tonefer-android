@@ -4,7 +4,6 @@ import android.app.Application
 import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.lifecycle.DefaultLifecycleObserver
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.pankqx.tonefer.data.Item
@@ -30,8 +29,9 @@ class ToneferApp : Application() {
     lateinit var client: ToneferClient
         private set
 
-    val inForeground: Boolean
-        get() = ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+    /** True while any Tonefer screen is visible (including the invisible share target). */
+    @Volatile var inForeground: Boolean = false
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -42,10 +42,18 @@ class ToneferApp : Application() {
             val laptop = (client.conn.value as? Conn.Online)?.laptop ?: "laptop"
             Notifications.delivered(this, n, laptop)
         }
+        // Search non-stop only while Tonefer is on screen. In the background the search winds
+        // down by itself, so there's no endless "looking for your laptop" in the shade.
+        client.keepSearching = { inForeground }
+        client.onIdle = { waiting ->
+            ConnectionService.stop(this)
+            if (waiting > 0) Notifications.queued(this, waiting, gaveUp = true)
+        }
         Notifications.createChannels(this)
 
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
+                inForeground = true
                 if (settings.current.pairing != null) {
                     client.start()
                     if (settings.current.background) ConnectionService.start(this@ToneferApp)
@@ -53,6 +61,7 @@ class ToneferApp : Application() {
             }
 
             override fun onStop(owner: LifecycleOwner) {
+                inForeground = false
                 if (!settings.current.background) client.stop()
             }
         })
