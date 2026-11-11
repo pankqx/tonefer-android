@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.1 — November 2026
+
+- Long transfers no longer stop when the screen turns off: the phone stays awake and the transfer runs as a foreground task with progress in the notification
+- The screen stays on while a transfer is visible
+- A dropped connection is retried for about five minutes instead of one
+- When a transfer fails, the app now says why
+- Sending a very large file to an old laptop version shows a message instead of running out of memory
+
 ## 1.5.0 — November 2026
 
 - Cancel a transfer: tap ✕ on its progress row

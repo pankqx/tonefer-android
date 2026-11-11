@@ -48,7 +48,7 @@ object Notifications {
     )
 
     /** What the background notification shows: the laptop if connected, and anything waiting to go. */
-    data class Status(val laptop: String?, val queued: Int)
+    data class Status(val laptop: String?, val queued: Int, val transfer: String? = null, val percent: Int = 0)
 
     private fun items(n: Int) = if (n == 1) "1 item" else "$n items"
 
@@ -65,6 +65,9 @@ object Notifications {
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_DEFERRED)
         when {
+            status.transfer != null ->
+                b.setContentTitle(status.transfer).setContentText("Keep the hotspot on. You can lock the phone.")
+                    .setProgress(100, status.percent, status.percent <= 0)
             status.laptop != null && status.queued > 0 ->
                 b.setContentTitle("Sending ${items(status.queued)} to ${status.laptop}")
             status.laptop != null ->

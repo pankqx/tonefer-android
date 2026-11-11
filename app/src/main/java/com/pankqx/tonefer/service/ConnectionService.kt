@@ -27,7 +27,7 @@ class ConnectionService : LifecycleService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
         val app = application as ToneferApp
-        val status = status(app.client.conn.value, app.client.queued.value)
+        val status = status(app.client.conn.value, app.client.queued.value, app.client.uploads.value)
         posted = status
         try {
             ServiceCompat.startForeground(
@@ -47,7 +47,7 @@ class ConnectionService : LifecycleService() {
                 val nm = getSystemService(NotificationManager::class.java)
                 // Only connected / waiting-to-send changes are worth updating the notification for.
                 // Connecting and searching blips are left out, so it never flickers or re-alerts.
-                combine(app.client.conn, app.client.queued) { c, q -> status(c, q) }
+                combine(app.client.conn, app.client.queued, app.client.uploads) { c, q, u -> status(c, q, u) }
                     .distinctUntilChanged()
                     .collect {
                         if (it != posted) {
@@ -64,7 +64,12 @@ class ConnectionService : LifecycleService() {
     private var collecting = false
     private var posted: Notifications.Status? = null
 
-    private fun status(c: Conn, queued: Int) = Notifications.Status((c as? Conn.Online)?.laptop, queued)
+    private fun status(c: Conn, queued: Int, uploads: List<com.pankqx.tonefer.net.Upload>): Notifications.Status {
+        val u = uploads.firstOrNull()
+        // Whole percents only, so a long transfer updates the notification at most 100 times.
+        return Notifications.Status((c as? Conn.Online)?.laptop, queued,
+            u?.let { "${it.label} ${it.name}" }, u?.let { (it.progress * 100).toInt().coerceIn(0, 100) } ?: 0)
+    }
 
     companion object {
         fun start(context: Context) {

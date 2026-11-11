@@ -112,6 +112,15 @@ fun HomeScreen(app: ToneferApp, onSettings: () -> Unit, onHelp: () -> Unit, onAb
     val conn by app.client.conn.collectAsState()
     val items by app.client.items.collectAsState()
     val uploads by app.client.uploads.collectAsState()
+    // Keep the screen on while something is moving, and say why if a transfer fails.
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(uploads.isNotEmpty()) {
+        view.keepScreenOn = uploads.isNotEmpty()
+        onDispose { view.keepScreenOn = false }
+    }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        app.client.errors.collect { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+    }
     val queued by app.client.queued.collectAsState()
     val speed by app.client.speed.collectAsState()
     LaunchedEffect(speed) {
@@ -140,7 +149,7 @@ fun HomeScreen(app: ToneferApp, onSettings: () -> Unit, onHelp: () -> Unit, onAb
         app.scope.launch {
             val ok = app.client.sendFiles(outgoing)
             scope.launch {
-                if (ok < outgoing.size) Toast.makeText(context, if (ok == 0) "Couldn't reach your laptop" else "Sent $ok of ${outgoing.size}", Toast.LENGTH_SHORT).show()
+                if (ok < outgoing.size && !app.client.isOnline) Toast.makeText(context, "Laptop not reachable. Queued for when it's back.", Toast.LENGTH_SHORT).show()
             }
         }
     }

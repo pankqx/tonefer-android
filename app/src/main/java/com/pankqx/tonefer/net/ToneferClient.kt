@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -80,7 +81,7 @@ class ToneferClient(
         .connectTimeout(4, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
-        .pingInterval(20, TimeUnit.SECONDS)
+        .pingInterval(45, TimeUnit.SECONDS)   // generous: a busy upload can delay pongs
         .build()
     private val discovery = Discovery(http)
 
@@ -154,7 +155,8 @@ class ToneferClient(
 
     /** True when it's time to stop searching in the background. */
     private fun shouldRest(): Boolean {
-        if (keepSearching()) { awaySince = 0L; return false }
+        // Never wind down in the middle of a transfer.
+        if (keepSearching() || _uploads.value.isNotEmpty()) { awaySince = 0L; return false }
         val now = System.currentTimeMillis()
         if (awaySince == 0L) { awaySince = now; return false }
         val window = if (_queued.value > 0) QUEUE_WINDOW_MS else IDLE_MS
@@ -323,11 +325,28 @@ class ToneferClient(
 
     private class Fatal(message: String) : Exception(message)
 
+    /** Why the last transfer failed, in plain words, for the screen to show. */
+    val errors = MutableSharedFlow<String>(extraBufferCapacity = 8)
+
+    private fun report(name: String, t: Throwable) {
+        if (t is kotlinx.coroutines.CancellationException) throw t
+        val why = when {
+            t is Fatal && t.message == "Cancelled" -> return
+            t is Fatal -> t.message ?: "the laptop refused it"
+            t is OutOfMemoryError -> "the phone ran out of memory"
+            t is IOException -> "the connection to the laptop was lost (${t.message ?: t.javaClass.simpleName})"
+            t is SecurityException -> "Tonefer no longer has permission to read it. Pick it again."
+            else -> t.message ?: t.javaClass.simpleName
+        }
+        errors.tryEmit("Couldn't send $name: $why")
+    }
+
     /** POST with the token. Returns the HTTP code and the JSON body (empty object if none). */
     private fun post(p: Pairing, path: String, body: RequestBody): Pair<Int, JSONObject> {
         val req = Request.Builder().url("${p.baseUrl}$path").header("X-Tonefer-Token", p.token).post(body).build()
         return http.newCall(req).execute().use { r ->
-            val json = try { JSONObject(r.body?.string().orEmpty()) } catch (_: Exception) { JSONObject() }
+            val raw = r.body?.string().orEmpty()
+            val json = try { JSONObject(raw) } catch (_: Exception) { JSONObject().put("_text", raw.take(200)) }
             r.code to json
         }
     }
@@ -363,7 +382,7 @@ class ToneferClient(
         if (zip != null) meta.put("zip", zip).put("path", f.path ?: name)
         val (code, start) = post(p, "/api/upload/start", sealedBody(p, meta))
         if (code == 404 || code == 405) { if (zip == null) return false else throw Fatal("Update Tonefer on your laptop to send zips") }
-        if (code !in 200..299) throw Fatal("Laptop refused the transfer ($code)")
+        if (code !in 200..299) throw Fatal(start.optString("_text").ifBlank { "The laptop refused the transfer ($code)" })
         val tid = start.getString("id")
         val chunk = start.optInt("chunk", 4 * 1024 * 1024)
         var cur = ByteArray(chunk)
@@ -387,8 +406,9 @@ class ToneferClient(
                         if (c == 404 || c == 409 || c == 400) throw Fatal("Transfer was interrupted")
                         throw IOException("HTTP $c")
                     } catch (e: IOException) {
-                        if (++tries > 8) throw e
-                        delay(minOf(1000L shl (tries - 1), 10_000L))   // hotspot hiccup: wait, send it again
+                        // Hotspot hiccup or the laptop briefly asleep: keep trying for about five minutes.
+                        if (++tries > 34) throw e
+                        delay(minOf(1000L shl minOf(tries - 1, 4), 10_000L))
                     }
                 }
                 onBytes(curN.toLong())
@@ -433,8 +453,12 @@ class ToneferClient(
                     setUpload(id, if (size > 0) sent.toFloat() / size else 0f, if (secs > 0.2) sent / secs else 0.0)
                 }
             }
-            ok || legacyUpload(p, name, mime, small ?: f.open().use { it.readBytes() })
-        } catch (_: Exception) {
+            ok || legacyUpload(p, name, mime, small ?: run {
+                if (f.size < 0 || f.size > 200L * 1024 * 1024) throw Fatal("Update Tonefer on your laptop to send files this big")
+                f.open().use { it.readBytes() }
+            })
+        } catch (t: Throwable) {
+            report(f.name, t)
             false
         } finally {
             _uploads.update { l -> l.filterNot { it.id == id } }
@@ -476,8 +500,9 @@ class ToneferClient(
             }
             val (fc, _) = post(p, "/api/zip/$zip/finish", sealedBody(p, JSONObject().put("zip", zip)))
             fc in 200..299
-        } catch (_: Exception) {
+        } catch (t: Throwable) {
             zip?.let { delete(p, "/api/zip/$it") }
+            report(shown, t)
             false
         } finally {
             _uploads.update { l -> l.filterNot { it.id == id } }

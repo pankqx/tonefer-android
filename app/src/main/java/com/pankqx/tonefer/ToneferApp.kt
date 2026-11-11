@@ -44,6 +44,21 @@ class ToneferApp : Application() {
         }
         // Search non-stop only while Tonefer is on screen. In the background the search winds
         // down by itself, so there's no endless "looking for your laptop" in the shade.
+        // A long transfer must survive the screen turning off: hold the CPU awake and keep the
+        // foreground service up for as long as anything is moving.
+        val wake = (getSystemService(POWER_SERVICE) as android.os.PowerManager)
+            .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "tonefer:transfer").apply { setReferenceCounted(false) }
+        scope.launch {
+            client.uploads.map { it.isNotEmpty() }.distinctUntilChanged().collect { busy ->
+                if (busy) {
+                    wake.acquire(6 * 60 * 60 * 1000L)
+                    ConnectionService.start(this@ToneferApp)
+                } else {
+                    if (wake.isHeld) wake.release()
+                    if (!settings.current.background && !inForeground) ConnectionService.stop(this@ToneferApp)
+                }
+            }
+        }
         client.keepSearching = { inForeground }
         client.onIdle = { waiting ->
             ConnectionService.stop(this)
