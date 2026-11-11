@@ -311,8 +311,15 @@ class ToneferClient(
         uploadZip(name, files)
     }
 
-    private fun setUpload(id: String, progress: Float, bps: Double, name: String? = null) =
+    private val cancelled: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    /** Stops a transfer shown in [uploads]. It ends at the next chunk and nothing is published. */
+    fun cancel(id: String) { cancelled.add(id) }
+
+    private fun setUpload(id: String, progress: Float, bps: Double, name: String? = null) {
+        if (cancelled.remove(id)) throw Fatal("Cancelled")
         _uploads.update { l -> l.map { if (it.id == id) it.copy(progress = progress, bps = bps, name = name ?: it.name) else it } }
+    }
 
     private class Fatal(message: String) : Exception(message)
 

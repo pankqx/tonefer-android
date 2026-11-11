@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.0 — November 2026
+
+- Cancel a transfer: tap ✕ on its progress row
+- "Ask where to save" setting: Save opens the system dialog so you choose the folder and name
+- Works with laptop guest sessions (Tonefer 1.6 on the laptop)
+
 ## 1.4.0 — November 2026
 
 - Send a whole folder as a zip: Attach → Folder as zip. Sub-folders are kept

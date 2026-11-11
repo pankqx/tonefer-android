@@ -266,6 +266,8 @@ fun HomeScreen(app: ToneferApp, onSettings: () -> Unit, onHelp: () -> Unit, onAb
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("${u.label} ${u.name}", fontSize = ts(11.5f), color = tone.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     if (u.bps > 0) Text("%.1f MB/s".format(u.bps / 1e6), fontSize = ts(11.5f), color = tone.accent, fontWeight = FontWeight.Medium)
+                    Text("✕", fontSize = ts(13f), color = tone.muted,
+                        modifier = Modifier.clickableNoRipple { app.client.cancel(u.id) }.padding(start = 12.dp, end = 2.dp))
                 }
                 Spacer(Modifier.height(4.dp))
                 ProgressBar(u.progress)
@@ -420,6 +422,19 @@ private fun Slip(app: ToneferApp, item: Item, onOpenImage: (Item) -> Unit) {
     val fg = if (mine) tone.mineInk else tone.ink
     val sub = if (mine) tone.mineMuted else tone.muted
 
+    // "Ask where to save": the system's save dialog picks the folder and the name.
+    val pendingSave = remember { mutableStateOf<File?>(null) }
+    val saveAs = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
+        val f = pendingSave.value
+        pendingSave.value = null
+        if (uri != null && f != null) scope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                runCatching { context.contentResolver.openOutputStream(uri)?.use { o -> f.inputStream().use { it.copyTo(o, 256 * 1024) } } }.isSuccess
+            }
+            Toast.makeText(context, if (ok) "Saved" else "Couldn't save there", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     fun withFile(action: suspend (File) -> Unit) {
         scope.launch {
             try { action(app.client.fileFor(item)) }
@@ -484,8 +499,13 @@ private fun Slip(app: ToneferApp, item: Item, onOpenImage: (Item) -> Unit) {
                 } else {
                     MiniIcon(R.drawable.ic_download, "Save to phone", sub) {
                         withFile {
-                            val folder = withContext(Dispatchers.IO) { Files.saveToDevice(context, it, item.name ?: it.name, item.mime ?: "application/octet-stream") }
-                            Toast.makeText(context, "Saved to $folder", Toast.LENGTH_SHORT).show()
+                            if (app.settings.current.askSave) {
+                                pendingSave.value = it
+                                saveAs.launch(item.name ?: it.name)
+                            } else {
+                                val folder = withContext(Dispatchers.IO) { Files.saveToDevice(context, it, item.name ?: it.name, item.mime ?: "application/octet-stream") }
+                                Toast.makeText(context, "Saved to $folder", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
                     MiniIcon(R.drawable.ic_link, "Share", sub) { withFile { Files.share(context, it, item.mime ?: "*/*") } }

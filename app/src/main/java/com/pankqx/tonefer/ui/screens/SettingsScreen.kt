@@ -114,6 +114,8 @@ fun SettingsScreen(app: ToneferApp, onBack: () -> Unit, onAbout: () -> Unit) {
             DashedDivider()
             CheckRow("Save other received files", "Into Download/Tonefer", s.autoSaveFiles) { v -> set { it.copy(autoSaveFiles = v) } }
             DashedDivider()
+            CheckRow("Ask where to save", "Tapping Save lets you pick the folder and name each time", s.askSave) { v -> set { it.copy(askSave = v) } }
+            DashedDivider()
             CheckRow("Copy received notes automatically", "Notes from the laptop go straight to your clipboard", s.autoCopyText) { v -> set { it.copy(autoCopyText = v) } }
             DashedDivider()
             ChoiceRow(
