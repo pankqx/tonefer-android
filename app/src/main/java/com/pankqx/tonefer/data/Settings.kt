@@ -45,6 +45,7 @@ data class AppSettings(
     val imageQuality: ImageQuality = ImageQuality.ORIGINAL,
     val zipMultiple: Boolean = false,
     val askSave: Boolean = false,
+    val updateCheck: Boolean = true,
     val notify: Boolean = true,
     val vibrate: Boolean = true,
     val background: Boolean = true,
@@ -68,6 +69,7 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
         val imageQuality = stringPreferencesKey("image_quality")
         val zipMultiple = booleanPreferencesKey("zip_multiple")
         val askSave = booleanPreferencesKey("ask_save")
+        val updateCheck = booleanPreferencesKey("update_check")
         val notify = booleanPreferencesKey("notify")
         val vibrate = booleanPreferencesKey("vibrate")
         val background = booleanPreferencesKey("background")
@@ -96,6 +98,7 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
             imageQuality = p.enum(K.imageQuality, d.imageQuality),
             zipMultiple = p[K.zipMultiple] ?: d.zipMultiple,
             askSave = p[K.askSave] ?: d.askSave,
+            updateCheck = p[K.updateCheck] ?: d.updateCheck,
             notify = p[K.notify] ?: d.notify,
             vibrate = p[K.vibrate] ?: d.vibrate,
             background = p[K.background] ?: d.background,
@@ -126,6 +129,7 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
             p[K.imageQuality] = s.imageQuality.name
             p[K.zipMultiple] = s.zipMultiple
             p[K.askSave] = s.askSave
+            p[K.updateCheck] = s.updateCheck
             p[K.notify] = s.notify
             p[K.vibrate] = s.vibrate
             p[K.background] = s.background

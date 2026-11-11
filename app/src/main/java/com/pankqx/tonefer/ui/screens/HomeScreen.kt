@@ -251,6 +251,20 @@ fun HomeScreen(app: ToneferApp, onSettings: () -> Unit, onHelp: () -> Unit, onAb
             )
         }
 
+        // ---- a newer version is out ----
+        val upd by app.updater.state.collectAsState()
+        if (upd.available) Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).background(tone.accentSoft).padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                upd.progress?.let { "Downloading update… ${(it * 100).toInt()}%" } ?: upd.message ?: "Tonefer ${upd.latest} is available",
+                fontSize = ts(12.5f), modifier = Modifier.weight(1f),
+            )
+            if (upd.progress == null) Text("UPDATE", color = tone.accent, fontWeight = FontWeight.SemiBold, fontSize = ts(12.5f),
+                modifier = Modifier.clickableNoRipple { app.scope.launch { app.updater.update() } }.padding(start = 12.dp))
+        }
+
         // ---- timeline ----
         LazyColumn(
             state = list,

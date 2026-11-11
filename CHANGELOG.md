@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.0 — November 2026
+
+- One-tap updates: the app checks GitHub when opened, shows a banner when a new version is out, downloads it and opens Android's installer. Settings and pairing are kept
+- Settings → Updates: turn the automatic check off, or check by hand
+
 ## 1.5.1 — November 2026
 
 - Long transfers no longer stop when the screen turns off: the phone stays awake and the transfer runs as a foreground task with progress in the notification

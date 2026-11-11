@@ -128,6 +128,11 @@ fun SettingsScreen(app: ToneferApp, onBack: () -> Unit, onAbout: () -> Unit) {
             )
         }
 
+        RetroWindow("Updates", Modifier.fillMaxWidth()) {
+            CheckRow("Check for updates automatically", "Looks on GitHub when you open the app. Needs internet; nothing about you is sent", s.updateCheck) { v -> set { it.copy(updateCheck = v) } }
+            UpdateBlock()
+        }
+
         RetroWindow("Folders & zip", Modifier.fillMaxWidth()) {
             CheckRow("Share several files as one zip", "When you share 2 or more things to Tonefer, the laptop gets a single zip", s.zipMultiple) { v -> set { it.copy(zipMultiple = v) } }
         }

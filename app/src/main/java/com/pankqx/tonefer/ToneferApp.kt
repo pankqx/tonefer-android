@@ -27,6 +27,8 @@ class ToneferApp : Application() {
     lateinit var settings: SettingsStore
         private set
     lateinit var client: ToneferClient
+    val updater by lazy { com.pankqx.tonefer.util.Updater(this) }
+    private var lastUpdateCheck = 0L
         private set
 
     /** True while any Tonefer screen is visible (including the invisible share target). */
@@ -69,6 +71,12 @@ class ToneferApp : Application() {
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
                 inForeground = true
+                // Look for a new version when the app is opened, at most twice a day.
+                val now = System.currentTimeMillis()
+                if (settings.current.updateCheck && now - lastUpdateCheck > 12 * 3600_000L) {
+                    lastUpdateCheck = now
+                    scope.launch { updater.check() }
+                }
                 if (settings.current.pairing != null) {
                     client.start()
                     if (settings.current.background) ConnectionService.start(this@ToneferApp)

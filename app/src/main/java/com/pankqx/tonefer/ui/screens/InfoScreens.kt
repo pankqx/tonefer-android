@@ -1,6 +1,9 @@
 package com.pankqx.tonefer.ui.screens
 
 import com.pankqx.tonefer.BuildConfig
+import androidx.compose.runtime.collectAsState
+import com.pankqx.tonefer.ui.components.RetroButton
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -76,6 +79,25 @@ fun InstructionsScreen(onBack: () -> Unit) {
     }
 }
 
+/** Version check and one-tap update. */
+@Composable
+fun UpdateBlock() {
+    val tone = LocalTone.current
+    val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as com.pankqx.tonefer.ToneferApp
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val u = app.updater.state.collectAsState().value
+    Spacer(Modifier.height(10.dp))
+    when {
+        u.progress != null -> Text("Downloading update… ${(u.progress * 100).toInt()}%", color = tone.accent, fontSize = ts(12.5f))
+        u.available -> RetroButton("Update to ${u.latest}", onClick = { scope.launch { app.updater.update() } })
+        else -> RetroButton(if (u.checking) "Checking…" else "Check for updates", onClick = { scope.launch { app.updater.check() } })
+    }
+    u.message?.let {
+        Spacer(Modifier.height(6.dp))
+        Text(it, color = tone.muted, fontSize = ts(12f))
+    }
+}
+
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
     val tone = LocalTone.current
@@ -87,6 +109,7 @@ fun AboutScreen(onBack: () -> Unit) {
             Brand()
             Spacer(Modifier.height(6.dp))
             Text("Version $version", color = tone.muted, fontSize = ts(12.5f))
+            UpdateBlock()
             Spacer(Modifier.height(12.dp))
             Text("Private, offline transfer between your phone and your laptop.", fontSize = ts(13.5f))
             Spacer(Modifier.height(14.dp))
