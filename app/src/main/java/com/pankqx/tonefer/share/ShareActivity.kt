@@ -50,9 +50,12 @@ class ShareActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             val staged = withContext(Dispatchers.IO) { stage(app.client, uris) }
+            // Several things shared at once can travel as a single zip (Settings → Folders & zip).
+            val zipName = if (app.settings.current.zipMultiple && staged.size > 1)
+                "Tonefer " + java.text.SimpleDateFormat("yyyy-MM-dd HH.mm", java.util.Locale.US).format(java.util.Date()) else null
             // Quick check: is the laptop there? If not, keep the item and open the hotspot switch.
             if (!app.client.awaitOnline(2_500)) {
-                app.client.queue(text, staged)
+                app.client.queue(text, staged, zipName)
                 cleanup()
                 // With the background connection on, its notification already shows what's waiting.
                 if (!app.settings.current.background) Notifications.queued(app, app.client.queued.value)
@@ -65,10 +68,12 @@ class ShareActivity : ComponentActivity() {
             app.scope.launch {
                 val ok = if (text != null) {
                     if (app.client.sendText(text)) 1 else 0
+                } else if (zipName != null) {
+                    (if (app.client.sendZip(zipName, staged)) 1 else 0).also { cleanup() }
                 } else {
                     app.client.sendFiles(staged).also { cleanup() }
                 }
-                val total = if (text != null) 1 else staged.size
+                val total = if (text != null || zipName != null) 1 else staged.size
                 withContext(Dispatchers.Main) {
                     val msg = when {
                         ok == total && total == 1 -> "Sent to $laptop"
@@ -96,8 +101,8 @@ class ShareActivity : ComponentActivity() {
         try {
             val src = client.outgoingFrom(uri)
             val file = File(outDir(), "${System.nanoTime()}_${ToneferClient.safeName(src.name)}")
-            file.writeBytes(src.read())
-            Outgoing(src.name, src.mime) { file.readBytes() }
+            src.open().use { i -> file.outputStream().use { o -> i.copyTo(o, 256 * 1024) } }
+            Outgoing(src.name, src.mime, file.length(), src.name) { file.inputStream() }
         } catch (_: Exception) {
             null
         }

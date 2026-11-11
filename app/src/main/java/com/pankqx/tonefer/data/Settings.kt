@@ -43,6 +43,7 @@ data class AppSettings(
     val autoSaveFiles: Boolean = false,
     val autoCopyText: Boolean = false,
     val imageQuality: ImageQuality = ImageQuality.ORIGINAL,
+    val zipMultiple: Boolean = false,
     val notify: Boolean = true,
     val vibrate: Boolean = true,
     val background: Boolean = true,
@@ -64,6 +65,7 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
         val autoSaveFiles = booleanPreferencesKey("auto_save_files")
         val autoCopyText = booleanPreferencesKey("auto_copy_text")
         val imageQuality = stringPreferencesKey("image_quality")
+        val zipMultiple = booleanPreferencesKey("zip_multiple")
         val notify = booleanPreferencesKey("notify")
         val vibrate = booleanPreferencesKey("vibrate")
         val background = booleanPreferencesKey("background")
@@ -90,6 +92,7 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
             autoSaveFiles = p[K.autoSaveFiles] ?: d.autoSaveFiles,
             autoCopyText = p[K.autoCopyText] ?: d.autoCopyText,
             imageQuality = p.enum(K.imageQuality, d.imageQuality),
+            zipMultiple = p[K.zipMultiple] ?: d.zipMultiple,
             notify = p[K.notify] ?: d.notify,
             vibrate = p[K.vibrate] ?: d.vibrate,
             background = p[K.background] ?: d.background,
@@ -118,6 +121,7 @@ class SettingsStore(context: Context, scope: CoroutineScope) {
             p[K.autoSaveFiles] = s.autoSaveFiles
             p[K.autoCopyText] = s.autoCopyText
             p[K.imageQuality] = s.imageQuality.name
+            p[K.zipMultiple] = s.zipMultiple
             p[K.notify] = s.notify
             p[K.vibrate] = s.vibrate
             p[K.background] = s.background

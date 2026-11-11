@@ -63,4 +63,20 @@ class CryptoTest {
         assertNull(Pairing.parse("https://example.com"))
         assertNull(Pairing.parse("http://10.0.0.1:8765/#k=short"))
     }
+
+    @Test fun chunkHeaderMatchesLaptop() {
+        // struct.pack(">16sIB", b"0123456789abcdef", 258, 1) on the laptop
+        val h = com.pankqx.tonefer.crypto.Chunks.header("0123456789abcdef", 258, true)
+        assertArrayEquals(hex("30313233343536373839616263646566" + "00000102" + "01"), h)
+    }
+
+    @Test fun chunkRoundTrip() {
+        val key = ByteArray(32) { it.toByte() }
+        val data = ByteArray(1000) { (it * 7).toByte() }
+        val sealed = com.pankqx.tonefer.crypto.Chunks.seal(key, "abcdef0123456789", 7, false, data, 600)
+        val c = com.pankqx.tonefer.crypto.Chunks.open(key, sealed)
+        assertEquals("abcdef0123456789", c.tid); assertEquals(7, c.index); assertEquals(false, c.last)
+        assertEquals(600, c.length)
+        assertArrayEquals(data.copyOf(600), c.plain.copyOfRange(c.offset, c.offset + c.length))
+    }
 }

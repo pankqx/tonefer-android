@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.0 — November 2026
+
+- Send a whole folder as a zip: Attach → Folder as zip. Sub-folders are kept
+- Send several files as one zip (Attach → Files as one zip), or turn on "Share several files as one zip" in Settings for the share sheet
+- No more 400 MB limit: files of any size move in small encrypted chunks, in both directions, without filling the phone's memory
+- A chunk lost to a hotspot hiccup is sent again instead of failing the whole transfer
+- Progress and speed for big downloads from the laptop
+- Folders shared while the laptop is away are queued and sent as a zip when it's back
+
 ## 1.3.0 — November 2026
 
 - New start-up animation built around speed: packets race from phone to laptop over a warp field that keeps accelerating, a live percentage meter, and a hyperjump into the app after five seconds

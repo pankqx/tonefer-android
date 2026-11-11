@@ -169,6 +169,29 @@ fun HomeScreen(app: ToneferApp, onSettings: () -> Unit, onHelp: () -> Unit, onAb
 
     val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(50)) { sendUris(it) }
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { sendUris(it) }
+    fun zipResult(name: String, ok: Boolean) {
+        scope.launch {
+            val msg = if (ok) "Sent $name.zip" else if (app.client.isOnline) "Couldn't send $name.zip" else "Laptop not reachable. $name.zip is queued."
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        }
+    }
+    val pickZipFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) {
+            val name = "Tonefer " + java.text.SimpleDateFormat("yyyy-MM-dd HH.mm", java.util.Locale.US).format(Date())
+            val outgoing = uris.map { app.client.outgoingFrom(it) }
+            app.scope.launch { zipResult(name, app.client.sendZip(name, outgoing)) }
+        }
+    }
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
+        if (tree != null) {
+            Toast.makeText(context, "Reading folder…", Toast.LENGTH_SHORT).show()
+            app.scope.launch {
+                val picked = withContext(Dispatchers.IO) { com.pankqx.tonefer.util.Folders.walk(context, tree) }
+                if (picked.files.isEmpty()) scope.launch { Toast.makeText(context, "That folder is empty", Toast.LENGTH_SHORT).show() }
+                else zipResult(picked.name, app.client.sendZip(picked.name, picked.files))
+            }
+        }
+    }
 
     Column(Modifier.fillMaxSize().backdrop().imePadding()) {
         // ---- menu bar ----
@@ -241,7 +264,7 @@ fun HomeScreen(app: ToneferApp, onSettings: () -> Unit, onHelp: () -> Unit, onAb
         uploads.forEach { u ->
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Sending ${u.name}", fontSize = ts(11.5f), color = tone.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text("${u.label} ${u.name}", fontSize = ts(11.5f), color = tone.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     if (u.bps > 0) Text("%.1f MB/s".format(u.bps / 1e6), fontSize = ts(11.5f), color = tone.accent, fontWeight = FontWeight.Medium)
                 }
                 Spacer(Modifier.height(4.dp))
@@ -270,6 +293,8 @@ fun HomeScreen(app: ToneferApp, onSettings: () -> Unit, onHelp: () -> Unit, onAb
                         pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
                     }
                     MenuRow("Files") { attachMenu = false; pickFiles.launch(arrayOf("*/*")) }
+                    MenuRow("Files as one zip") { attachMenu = false; pickZipFiles.launch(arrayOf("*/*")) }
+                    MenuRow("Folder as zip") { attachMenu = false; pickFolder.launch(null) }
                 }
             }
             BasicTextField(
@@ -440,7 +465,8 @@ private fun Slip(app: ToneferApp, item: Item, onOpenImage: (Item) -> Unit) {
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(item.name.orEmpty(), color = fg, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text(Files.humanSize(item.size), color = sub, fontSize = ts(11.5f))
+                        Text(Files.humanSize(item.size) + if (item.files > 0) " · ${item.files} file${if (item.files == 1) "" else "s"}" else "",
+                            color = sub, fontSize = ts(11.5f))
                     }
                 }
             }

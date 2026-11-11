@@ -6,6 +6,7 @@ import android.graphics.ImageDecoder
 import android.net.Uri
 import android.provider.OpenableColumns
 import com.pankqx.tonefer.crypto.Box
+import com.pankqx.tonefer.crypto.Chunks
 import com.pankqx.tonefer.data.ImageQuality
 import com.pankqx.tonefer.data.Item
 import com.pankqx.tonefer.data.Pairing
@@ -14,6 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,6 +32,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
@@ -37,6 +40,8 @@ import okio.BufferedSink
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.IOException
+import java.io.InputStream
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
@@ -51,13 +56,16 @@ sealed interface Conn {
     data object Unpaired : Conn
 }
 
-data class Upload(val id: String, val name: String, val progress: Float, val bps: Double = 0.0)
+data class Upload(val id: String, val name: String, val progress: Float, val bps: Double = 0.0, val label: String = "Sending")
 
 /** Result of a speed test, bytes per second each way. */
 data class SpeedResult(val down: Double, val up: Double, val at: Long = System.currentTimeMillis())
 
-/** Something to send: a name, a type and a way to read the bytes. */
-class Outgoing(val name: String, val mime: String, val read: () -> ByteArray)
+/**
+ * Something to send: a name, a type and a way to read the bytes as a stream (so size doesn't matter).
+ * [size] is -1 when unknown. [path] is where it sits inside a zip, e.g. "Holiday/day 2/IMG_1.jpg".
+ */
+class Outgoing(val name: String, val mime: String, val size: Long = -1, val path: String? = null, val open: () -> InputStream)
 
 /**
  * Talks to the laptop. One instance per process (see [com.pankqx.tonefer.ToneferApp]).
@@ -115,7 +123,7 @@ class ToneferClient(
     private val flushLock = kotlinx.coroutines.sync.Mutex()
 
     init {
-        _queued.value = queueDir.listFiles { f -> f.name.endsWith(".json") }?.size ?: 0
+        _queued.value = queueCount()
     }
 
     private var loop: Job? = null
@@ -293,6 +301,102 @@ class ToneferClient(
         ok
     }
 
+    /** Sends several files (or a whole folder) as one zip, built on the laptop as they arrive. */
+    suspend fun sendZip(name: String, files: List<Outgoing>, queueIfOffline: Boolean = true): Boolean = withContext(Dispatchers.IO) {
+        if (files.isEmpty()) return@withContext false
+        if (!awaitOnline()) {
+            if (queueIfOffline) enqueueZip(name, files)
+            return@withContext false
+        }
+        uploadZip(name, files)
+    }
+
+    private fun setUpload(id: String, progress: Float, bps: Double, name: String? = null) =
+        _uploads.update { l -> l.map { if (it.id == id) it.copy(progress = progress, bps = bps, name = name ?: it.name) else it } }
+
+    private class Fatal(message: String) : Exception(message)
+
+    /** POST with the token. Returns the HTTP code and the JSON body (empty object if none). */
+    private fun post(p: Pairing, path: String, body: RequestBody): Pair<Int, JSONObject> {
+        val req = Request.Builder().url("${p.baseUrl}$path").header("X-Tonefer-Token", p.token).post(body).build()
+        return http.newCall(req).execute().use { r ->
+            val json = try { JSONObject(r.body?.string().orEmpty()) } catch (_: Exception) { JSONObject() }
+            r.code to json
+        }
+    }
+
+    private fun delete(p: Pairing, path: String) {
+        try {
+            http.newCall(Request.Builder().url("${p.baseUrl}$path").header("X-Tonefer-Token", p.token).delete().build()).execute().close()
+        } catch (_: Exception) { }
+    }
+
+    private fun sealedBody(p: Pairing, json: JSONObject) = Box.sealJson(p.key, json).toRequestBody(TEXT)
+
+    private fun readFull(input: InputStream, buf: ByteArray): Int {
+        var n = 0
+        while (n < buf.size) {
+            val r = input.read(buf, n, buf.size - n)
+            if (r < 0) break
+            n += r
+        }
+        return n
+    }
+
+    /**
+     * Streams one file to the laptop in sealed chunks. Memory use stays flat whatever the size,
+     * and a chunk lost to a network hiccup is simply sent again.
+     * Returns false if the laptop is too old for chunked transfers (caller falls back).
+     */
+    private suspend fun streamUp(
+        p: Pairing, f: Outgoing, name: String, mime: String, input: InputStream, size: Long,
+        zip: String?, onBytes: (Long) -> Unit,
+    ): Boolean {
+        val meta = JSONObject().put("name", name).put("mime", mime).put("size", size)
+        if (zip != null) meta.put("zip", zip).put("path", f.path ?: name)
+        val (code, start) = post(p, "/api/upload/start", sealedBody(p, meta))
+        if (code == 404 || code == 405) { if (zip == null) return false else throw Fatal("Update Tonefer on your laptop to send zips") }
+        if (code !in 200..299) throw Fatal("Laptop refused the transfer ($code)")
+        val tid = start.getString("id")
+        val chunk = start.optInt("chunk", 4 * 1024 * 1024)
+        var cur = ByteArray(chunk)
+        var next = ByteArray(chunk)
+        var curN = readFull(input, cur)
+        var index = 0
+        try {
+            while (true) {
+                // Read one chunk ahead, so we know whether this one is the last.
+                val nextN = if (curN == chunk) readFull(input, next) else 0
+                val last = nextN == 0
+                val body = Chunks.seal(p.key, tid, index, last, cur, curN).toRequestBody(BINARY)
+                var tries = 0
+                while (true) {
+                    currentCoroutineContext().ensureActive()
+                    try {
+                        val (c, r) = post(p, "/api/upload/$tid/$index", body)
+                        if (c in 200..299) break
+                        if (c == 409 && r.optInt("next", -1) == index + 1) break   // it did arrive
+                        if (c == 401 || c == 403) throw Fatal("Pairing changed. Scan the code on your laptop again.")
+                        if (c == 404 || c == 409 || c == 400) throw Fatal("Transfer was interrupted")
+                        throw IOException("HTTP $c")
+                    } catch (e: IOException) {
+                        if (++tries > 8) throw e
+                        delay(minOf(1000L shl (tries - 1), 10_000L))   // hotspot hiccup: wait, send it again
+                    }
+                }
+                onBytes(curN.toLong())
+                if (last) break
+                val t = cur; cur = next; next = t
+                curN = nextN
+                index++
+            }
+        } catch (e: Exception) {
+            if (zip == null) delete(p, "/api/upload/$tid")
+            throw e
+        }
+        return true
+    }
+
     private suspend fun upload(f: Outgoing): Boolean {
         val p = settings.current.pairing ?: return false
         val id = UUID.randomUUID().toString()
@@ -300,27 +404,73 @@ class ToneferClient(
         return try {
             var name = f.name
             var mime = f.mime
-            var bytes = f.read()
+            var size = f.size
+            var small: ByteArray? = null
             val quality = settings.current.imageQuality
-            if (quality.maxSide != null && mime.startsWith("image/") && mime != "image/gif") {
-                shrink(bytes, quality)?.let { small ->
-                    bytes = small
+            // Photos are resized in memory (they're small); everything else is streamed.
+            if (quality.maxSide != null && mime.startsWith("image/") && mime != "image/gif" && f.size in 0..(64L shl 20)) {
+                val bytes = f.open().use { it.readBytes() }
+                small = shrink(bytes, quality)?.also {
                     mime = "image/jpeg"
                     name = name.substringBeforeLast('.', name) + ".jpg"
+                } ?: bytes
+                size = small.size.toLong()
+            }
+            val start = System.nanoTime()
+            var sent = 0L
+            val input = small?.inputStream() ?: f.open()
+            val ok = input.use {
+                streamUp(p, f, name, mime, it, size, null) { n ->
+                    sent += n
+                    val secs = (System.nanoTime() - start) / 1e9
+                    setUpload(id, if (size > 0) sent.toFloat() / size else 0f, if (secs > 0.2) sent / secs else 0.0)
                 }
             }
-            if (bytes.size > MAX_BYTES) throw IllegalStateException("File is larger than 400 MB")
-            val sealed = Box.seal(p.key, bytes)
-            val meta = Box.sealJson(p.key, JSONObject().put("name", name).put("mime", mime))
-            val body = ProgressBody(sealed) { prog, bps -> _uploads.update { l -> l.map { if (it.id == id) it.copy(progress = prog, bps = bps) else it } } }
-            val req = Request.Builder()
-                .url("${p.baseUrl}/api/upload")
-                .header("X-Tonefer-Token", p.token)
-                .header("X-Tonefer-Meta", meta)
-                .post(body)
-                .build()
-            http.newCall(req).execute().use { it.isSuccessful }
+            ok || legacyUpload(p, name, mime, small ?: f.open().use { it.readBytes() })
         } catch (_: Exception) {
+            false
+        } finally {
+            _uploads.update { l -> l.filterNot { it.id == id } }
+        }
+    }
+
+    /** Single-request upload for laptops running a Tonefer older than 1.5. */
+    private fun legacyUpload(p: Pairing, name: String, mime: String, bytes: ByteArray): Boolean {
+        val meta = Box.sealJson(p.key, JSONObject().put("name", name).put("mime", mime))
+        val req = Request.Builder().url("${p.baseUrl}/api/upload")
+            .header("X-Tonefer-Token", p.token).header("X-Tonefer-Meta", meta)
+            .post(Box.seal(p.key, bytes).toRequestBody(BINARY)).build()
+        return http.newCall(req).execute().use { it.isSuccessful }
+    }
+
+    private suspend fun uploadZip(zipName: String, files: List<Outgoing>): Boolean {
+        val p = settings.current.pairing ?: return false
+        val id = UUID.randomUUID().toString()
+        val shown = if (zipName.endsWith(".zip", true)) zipName else "$zipName.zip"
+        _uploads.update { it + Upload(id, shown, 0f) }
+        var zip: String? = null
+        return try {
+            val total = files.sumOf { it.size.coerceAtLeast(0) }
+            val (code, z) = post(p, "/api/zip/start", sealedBody(p, JSONObject().put("name", zipName).put("files", files.size).put("size", total)))
+            if (code == 404 || code == 405) throw Fatal("Update Tonefer on your laptop to send zips")
+            if (code !in 200..299) throw Fatal("Laptop refused the transfer ($code)")
+            zip = z.getString("zip")
+            val start = System.nanoTime()
+            var sent = 0L
+            for ((n, f) in files.withIndex()) {
+                f.open().use { input ->
+                    streamUp(p, f, f.name, f.mime, input, f.size, zip) { b ->
+                        sent += b
+                        val secs = (System.nanoTime() - start) / 1e9
+                        setUpload(id, if (total > 0) (sent.toFloat() / total).coerceAtMost(1f) else 0f,
+                            if (secs > 0.2) sent / secs else 0.0, "$shown · ${n + 1} of ${files.size}")
+                    }
+                }
+            }
+            val (fc, _) = post(p, "/api/zip/$zip/finish", sealedBody(p, JSONObject().put("zip", zip)))
+            fc in 200..299
+        } catch (_: Exception) {
+            zip?.let { delete(p, "/api/zip/$it") }
             false
         } finally {
             _uploads.update { l -> l.filterNot { it.id == id } }
@@ -360,9 +510,15 @@ class ToneferClient(
                 if (c.moveToFirst()) c.getString(0)?.let { name = it }
             }
         } catch (_: Exception) { }
+        var size = -1L
+        try {
+            cr.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
+                if (c.moveToFirst() && !c.isNull(0)) size = c.getLong(0)
+            }
+        } catch (_: Exception) { }
         val mime = cr.getType(uri) ?: guessMime(name)
-        return Outgoing(name, mime) {
-            cr.openInputStream(uri)?.use { it.readBytes() } ?: throw IllegalStateException("Can't read $name")
+        return Outgoing(name, mime, size) {
+            cr.openInputStream(uri) ?: throw IllegalStateException("Can't read $name")
         }
     }
 
@@ -375,15 +531,52 @@ class ToneferClient(
         if (out.exists() && out.length() > 0) return@withContext out
         val p = settings.current.pairing ?: throw IllegalStateException("Not paired")
         val req = Request.Builder()
-            .url("${p.baseUrl}/api/file/${item.id}")
+            .url("${p.baseUrl}/api/file/${item.id}?v=2")
             .header("X-Tonefer-Token", p.token)
             .build()
-        val sealed = http.newCall(req).execute().use { r ->
-            if (!r.isSuccessful) throw IllegalStateException(if (r.code == 410) "File was removed on the laptop" else "Download failed (${r.code})")
-            r.body!!.bytes()
-        }
         val tmp = File(dir, out.name + ".part")
-        tmp.writeBytes(Box.open(p.key, sealed))
+        val big = item.size > 4L * 1024 * 1024
+        val rowId = UUID.randomUUID().toString()
+        if (big) _uploads.update { it + Upload(rowId, item.name ?: "file", 0f, label = "Receiving") }
+        try {
+            http.newCall(req).execute().use { r ->
+                if (!r.isSuccessful) throw IllegalStateException(when (r.code) {
+                    410 -> "File was removed on the laptop"
+                    413 -> "Update Tonefer on your laptop to receive files this big"
+                    else -> "Download failed (${r.code})"
+                })
+                val src = r.body!!.source()
+                if (r.header("X-Tonefer-Format") != "2") {
+                    tmp.writeBytes(Box.open(p.key, src.readByteArray()))   // laptop older than 1.5
+                } else {
+                    val total = r.header("X-Tonefer-Size")?.toLongOrNull() ?: item.size
+                    val start = System.nanoTime()
+                    var got = 0L
+                    var index = 0
+                    var last = false
+                    tmp.outputStream().buffered().use { o ->
+                        while (!src.exhausted()) {
+                            val n = src.readInt()
+                            if (n <= 0 || n > 16 * 1024 * 1024) throw IOException("Damaged transfer")
+                            val c = Chunks.open(p.key, src.readByteArray(n.toLong()))
+                            if (c.tid != item.id || c.index != index) throw IOException("Damaged transfer")
+                            o.write(c.plain, c.offset, c.length)
+                            got += c.length; index++; last = c.last
+                            if (big) {
+                                val secs = (System.nanoTime() - start) / 1e9
+                                setUpload(rowId, if (total > 0) got.toFloat() / total else 0f, if (secs > 0.2) got / secs else 0.0)
+                            }
+                        }
+                    }
+                    if (!last) throw IOException("Connection dropped")
+                }
+            }
+        } catch (e: Exception) {
+            tmp.delete()
+            throw e
+        } finally {
+            if (big) _uploads.update { l -> l.filterNot { it.id == rowId } }
+        }
         tmp.renameTo(out)
         out
     }
@@ -400,20 +593,39 @@ class ToneferClient(
             when (e) {
                 is QueuedText -> meta.put("type", "text").put("text", e.text)
                 is Outgoing -> {
-                    val bytes = try { e.read() } catch (_: Exception) { continue }
-                    File(queueDir, "$id.bin").writeBytes(bytes)
+                    val bin = File(queueDir, "$id.bin")
+                    try { e.open().use { i -> bin.outputStream().use { o -> i.copyTo(o, COPY) } } } catch (_: Exception) { bin.delete(); continue }
                     meta.put("type", "file").put("name", e.name).put("mime", e.mime)
                 }
             }
             File(queueDir, "$id.json").writeText(meta.toString())
         }
-        _queued.value = queueDir.listFiles { f -> f.name.endsWith(".json") }?.size ?: 0
+        _queued.value = queueCount()
         start()
     }
 
+    /** A folder or group of files waiting to go as one zip: its own directory with a manifest. */
+    private suspend fun enqueueZip(name: String, files: List<Outgoing>) = withContext(Dispatchers.IO) {
+        val dir = File(queueDir, "zip_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}").apply { mkdirs() }
+        val entries = org.json.JSONArray()
+        for ((n, f) in files.withIndex()) {
+            val bin = File(dir, "$n.bin")
+            try { f.open().use { i -> bin.outputStream().use { o -> i.copyTo(o, COPY) } } } catch (_: Exception) { bin.delete(); continue }
+            entries.put(JSONObject().put("file", bin.name).put("name", f.name).put("mime", f.mime).put("path", f.path ?: f.name))
+        }
+        if (entries.length() == 0) { dir.deleteRecursively(); return@withContext }
+        File(dir, "manifest").writeText(JSONObject().put("name", name).put("entries", entries).toString())
+        _queued.value = queueCount()
+        start()
+    }
+
+    private fun queueCount(): Int =
+        queueDir.listFiles { f -> f.name.endsWith(".json") || (f.isDirectory && File(f, "manifest").exists()) }?.size ?: 0
+
     /** Public entry point for the share sheet: queue now, deliver as soon as the laptop appears. */
-    suspend fun queue(text: String?, files: List<Outgoing>) {
-        enqueue(buildList { if (text != null) add(QueuedText(text)); addAll(files) })
+    suspend fun queue(text: String?, files: List<Outgoing>, zipName: String? = null) {
+        if (zipName != null && files.isNotEmpty()) enqueueZip(zipName, files)
+        else enqueue(buildList { if (text != null) add(QueuedText(text)); addAll(files) })
     }
 
     private suspend fun flushQueue() = flushLock.withLock {
@@ -428,11 +640,28 @@ class ToneferClient(
                     val p = settings.current.pairing
                     p != null && socket?.send(Box.sealJson(p.key, JSONObject().put("type", "text").put("text", meta.optString("text")))) == true
                 }
-                else -> data.exists() && upload(Outgoing(meta.optString("name", "file"), meta.optString("mime", "application/octet-stream")) { data.readBytes() })
+                else -> data.exists() && upload(Outgoing(meta.optString("name", "file"), meta.optString("mime", "application/octet-stream"), data.length()) { data.inputStream() })
             }
             if (ok) {
                 metaFile.delete(); data.delete(); delivered++
                 _queued.value = (_queued.value - 1).coerceAtLeast(0)
+            } else break
+        }
+        // Folders and groups queued as zips.
+        val zips = queueDir.listFiles { f -> f.isDirectory && File(f, "manifest").exists() }?.sortedBy { it.name }.orEmpty()
+        for (dir in zips) {
+            if (!isOnline) break
+            val m = try { JSONObject(File(dir, "manifest").readText()) } catch (_: Exception) { dir.deleteRecursively(); continue }
+            val arr = m.optJSONArray("entries") ?: org.json.JSONArray()
+            val files = (0 until arr.length()).mapNotNull { i ->
+                val e = arr.getJSONObject(i)
+                val bin = File(dir, e.optString("file"))
+                if (!bin.exists()) null
+                else Outgoing(e.optString("name", "file"), e.optString("mime", "application/octet-stream"), bin.length(), e.optString("path")) { bin.inputStream() }
+            }
+            if (files.isEmpty() || uploadZip(m.optString("name", "Tonefer"), files)) {
+                dir.deleteRecursively(); delivered++
+                _queued.value = queueCount()
             } else break
         }
         if (delivered > 0) onQueueDelivered?.invoke(delivered)
@@ -478,30 +707,11 @@ class ToneferClient(
         File(context.cacheDir, "outgoing").deleteRecursively()
     }
 
-    private class ProgressBody(private val data: ByteArray, private val onProgress: (Float, Double) -> Unit) : RequestBody() {
-        override fun contentType() = "application/octet-stream".toMediaType()
-        override fun contentLength() = data.size.toLong()
-        override fun writeTo(sink: BufferedSink) {
-            var sent = 0
-            var lastReport = 0f
-            val start = System.nanoTime()
-            while (sent < data.size) {
-                val n = minOf(CHUNK, data.size - sent)
-                sink.write(data, sent, n)
-                sent += n
-                val p = sent.toFloat() / data.size
-                if (p - lastReport > 0.02f || sent == data.size) {
-                    val secs = (System.nanoTime() - start) / 1e9
-                    onProgress(p, if (secs > 0.2) sent / secs else 0.0)
-                    lastReport = p
-                }
-            }
-        }
-    }
-
     companion object {
         private const val CHUNK = 64 * 1024
-        private const val MAX_BYTES = 400 * 1024 * 1024
+        private const val COPY = 256 * 1024
+        private val BINARY = "application/octet-stream".toMediaType()
+        private val TEXT = "text/plain".toMediaType()
 
         /** Background search time after the laptop leaves, with nothing to send. */
         const val IDLE_MS = 60_000L

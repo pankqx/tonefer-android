@@ -12,6 +12,7 @@ data class Item(
     val name: String? = null,
     val size: Long = 0,
     val mime: String? = null,
+    val files: Int = 0,        // zips built by Tonefer: how many files are inside
 ) {
     val isText get() = kind == "text"
     val isImage get() = kind == "file" && mime?.startsWith("image/") == true && mime != "image/svg+xml"
@@ -29,6 +30,7 @@ data class Item(
             name = if (o.has("name")) o.getString("name") else null,
             size = o.optLong("size", 0),
             mime = if (o.has("mime")) o.getString("mime") else null,
+            files = o.optInt("files", 0),
         )
     }
 }

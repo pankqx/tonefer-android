@@ -126,6 +126,10 @@ fun SettingsScreen(app: ToneferApp, onBack: () -> Unit, onAbout: () -> Unit) {
             )
         }
 
+        RetroWindow("Folders & zip", Modifier.fillMaxWidth()) {
+            CheckRow("Share several files as one zip", "When you share 2 or more things to Tonefer, the laptop gets a single zip", s.zipMultiple) { v -> set { it.copy(zipMultiple = v) } }
+        }
+
         RetroWindow("Notifications", Modifier.fillMaxWidth()) {
             CheckRow("Notify when something arrives", "While Tonefer is in the background", s.notify) { v -> set { it.copy(notify = v) } }
             DashedDivider()
