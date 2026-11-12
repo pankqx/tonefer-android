@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.0 — November 2026
+
+- Gallery (menu → Gallery): every photo and video on the phone, newest first and grouped by day
+- Instant viewer: swipe to move, double-tap or pinch to zoom, videos start as soon as they are on screen
+- Delete from the viewer or select several with a long press. On Android 11 and newer, deleted items go to the system trash for 30 days
+- Send to laptop straight from the Gallery
+
 ## 1.6.0 — November 2026
 
 - One-tap updates: the app checks GitHub when opened, shows a banner when a new version is out, downloads it and opens Android's installer. Settings and pairing are kept

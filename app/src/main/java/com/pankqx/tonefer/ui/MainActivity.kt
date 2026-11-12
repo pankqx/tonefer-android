@@ -55,7 +55,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen { HOME, SETTINGS, HELP, ABOUT }
+private enum class Screen { HOME, SETTINGS, HELP, ABOUT, GALLERY }
 
 @Composable
 private fun Root(app: ToneferApp) {
@@ -103,9 +103,11 @@ private fun Screens(app: ToneferApp) {
             onSettings = { screen = Screen.SETTINGS },
             onHelp = { help = true },
             onAbout = { screen = Screen.ABOUT },
+            onGallery = { screen = Screen.GALLERY },
         )
         Screen.SETTINGS -> SettingsScreen(app, onBack = { screen = Screen.HOME }, onAbout = { screen = Screen.ABOUT })
         Screen.HELP -> InstructionsScreen(onBack = { screen = Screen.HOME })
         Screen.ABOUT -> AboutScreen(onBack = { screen = Screen.SETTINGS })
+        Screen.GALLERY -> com.pankqx.tonefer.gallery.GalleryScreen(app, onBack = { screen = Screen.HOME })
     }
 }

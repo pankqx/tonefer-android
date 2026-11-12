@@ -29,6 +29,10 @@ Tonefer moves notes, photos and files between your phone and your own laptop. It
 - **Clear cache** (Settings → Storage) deletes received files from the app's storage.
 - The pairing key is excluded from Android cloud backups and device transfers.
 
+## Gallery
+
+The Gallery reads the list of photos and videos on your phone to show them to you. This needs Android's photos and videos permission. Nothing is uploaded or sent anywhere unless you press Send to laptop.
+
 ## Update check
 
 When you open the app, Tonefer asks GitHub which version is newest, and downloads the new version from GitHub if you tap Update. This is the only time the app uses the internet. No personal data, identifiers or transfer contents are sent; GitHub sees your IP address, as any website does. You can turn the automatic check off in Settings → Updates.
