@@ -81,6 +81,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)
     implementation(libs.coil.compose)
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.ui)
     implementation(libs.zxing.embedded)
     debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)

@@ -91,3 +91,13 @@ Tonefer has no servers, accounts, analytics, ads or crash reporting. See [PRIVAC
 ---
 
 <sub>Developed and owned by <b>K S Pankaj</b>. © 2026 K S Pankaj. All rights reserved. Third-party components are listed in the app under About → Credits.</sub>
+
+## Publishing on Google Play
+
+The Gallery's **Files** tab uses Android's *All files access* (`MANAGE_EXTERNAL_STORAGE`). That is fine for an app you install yourself. Google Play only allows it for apps whose main purpose needs it (file managers, backup apps), and asks for a declaration form. Before a Play upload, either:
+
+1. fill in the *All files access* declaration in Play Console, explaining the file browser; or
+2. remove the `MANAGE_EXTERNAL_STORAGE` line from `app/src/main/AndroidManifest.xml`. Nothing else needs to change: the Files tab then shows its "Allow access" screen, and Photos and Videos keep working with the normal media permission.
+
+Release builds are signed with the key in the repository secrets (`TONEFER_KEYSTORE_*`). Use the same key for Play App Signing so existing installs can update.
+

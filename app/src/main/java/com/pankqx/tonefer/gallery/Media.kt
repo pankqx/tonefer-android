@@ -82,3 +82,60 @@ object Media {
         return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s % 3600 / 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
     }
 }
+
+/** A document, archive, song or other non-media file (Gallery → Files). */
+data class FileItem(
+    val id: Long,
+    val uri: Uri,
+    val name: String,
+    val time: Long,
+    val size: Long,
+    val folder: String,
+    val mime: String,
+)
+
+object FilesIndex {
+    private val EXT = setOf(
+        "pdf", "doc", "docx", "odt", "rtf", "txt", "md", "xls", "xlsx", "ods", "csv", "ppt", "pptx", "odp",
+        "zip", "rar", "7z", "tar", "gz", "apk", "epub", "mp3", "wav", "m4a", "flac", "ogg", "opus", "aac",
+        "json", "xml", "html", "py", "js", "java", "kt", "c", "cpp", "psd", "tex",
+    )
+
+    /** True when Tonefer may list every file (Android's "All files access", or the old storage permission). */
+    fun allowed(context: Context): Boolean =
+        if (android.os.Build.VERSION.SDK_INT >= 30) android.os.Environment.isExternalStorageManager()
+        else context.checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    fun load(context: Context): List<FileItem> {
+        val out = ArrayList<FileItem>()
+        val base = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        val cols = arrayOf(
+            MediaStore.Files.FileColumns._ID, MediaStore.Files.FileColumns.DISPLAY_NAME,
+            MediaStore.Files.FileColumns.DATE_MODIFIED, MediaStore.Files.FileColumns.SIZE,
+            MediaStore.Files.FileColumns.RELATIVE_PATH, MediaStore.Files.FileColumns.MIME_TYPE,
+            MediaStore.Files.FileColumns.MEDIA_TYPE,
+        )
+        val where = "${MediaStore.Files.FileColumns.MEDIA_TYPE} NOT IN (" +
+            "${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE}, ${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO}) AND " +
+            "${MediaStore.Files.FileColumns.SIZE} > 0"
+        try {
+            context.contentResolver.query(base, cols, where, null, null)?.use { c ->
+                while (c.moveToNext()) {
+                    val name = c.getString(1) ?: continue
+                    val ext = name.substringAfterLast('.', "").lowercase()
+                    if (ext !in EXT) continue
+                    val id = c.getLong(0)
+                    out.add(FileItem(
+                        id = id, uri = ContentUris.withAppendedId(base, id), name = name,
+                        time = (if (c.isNull(2)) 0L else c.getLong(2)) * 1000,
+                        size = if (c.isNull(3)) 0L else c.getLong(3),
+                        folder = (c.getString(4) ?: "").trimEnd('/'),
+                        mime = c.getString(5) ?: "application/octet-stream",
+                    ))
+                }
+            }
+        } catch (_: Exception) { }
+        out.sortByDescending { it.time }
+        return out
+    }
+}

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.8.0 — November 2026
+
+- Reels-style viewer in the Gallery: swipe up for the next photo or video. The next and previous videos are prepared while you watch, so they start instantly; tap to pause
+- Gallery → Files: documents, archives, music and APKs, newest first. Tap to open, long-press to select, send to the laptop or delete. Needs Android's "All files access"
+- Release builds are now signed with Tonefer's own key, so future versions install over this one
+
 ## 1.7.0 — November 2026
 
 - Gallery (menu → Gallery): every photo and video on the phone, newest first and grouped by day
