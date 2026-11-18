@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.pankqx.tonefer.HostCoreTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-18T08:25:42" hostname="ip-10-0-139-199" time="0.525">
+  <properties/>
+  <testcase name="chunkedUploadArrivesIntact" classname="com.pankqx.tonefer.HostCoreTest" time="0.379"/>
+  <testcase name="servesPageAndChecksToken" classname="com.pankqx.tonefer.HostCoreTest" time="0.025"/>
+  <testcase name="framedDownloadMatches" classname="com.pankqx.tonefer.HostCoreTest" time="0.12"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
