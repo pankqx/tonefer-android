@@ -36,8 +36,22 @@ import com.pankqx.tonefer.ui.theme.LocalTone
 import com.pankqx.tonefer.ui.theme.ToneferTheme
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        /** "host" opens Phone to phone (from its notification). */
+        const val EXTRA_SCREEN = "screen"
+    }
+
+    /** Bumped when a notification asks for a screen while the app is already open. */
+    private val wanted = mutableStateOf<String?>(null)
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        intent.getStringExtra(EXTRA_SCREEN)?.let { wanted.value = it }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null) wanted.value = intent?.getStringExtra(EXTRA_SCREEN)
         enableEdgeToEdge()
         val app = application as ToneferApp
         setContent {
@@ -49,16 +63,16 @@ class MainActivity : ComponentActivity() {
                     else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
                     enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
                 }
-                Root(app)
+                Root(app, wanted)
             }
         }
     }
 }
 
-private enum class Screen { HOME, SETTINGS, HELP, ABOUT, GALLERY }
+private enum class Screen { HOME, SETTINGS, HELP, ABOUT, GALLERY, HOST }
 
 @Composable
-private fun Root(app: ToneferApp) {
+private fun Root(app: ToneferApp, wanted: androidx.compose.runtime.MutableState<String?>) {
     var booting by rememberSaveable { mutableStateOf(true) }
     val exit = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
@@ -69,7 +83,7 @@ private fun Root(app: ToneferApp) {
         booting = false
     }
     Box(Modifier.fillMaxSize()) {
-        Screens(app)
+        Screens(app, wanted)
         if (booting) LoadingScreen(
             Modifier
                 .graphicsLayer { translationY = -size.height * exit.value }
@@ -80,21 +94,27 @@ private fun Root(app: ToneferApp) {
 }
 
 @Composable
-private fun Screens(app: ToneferApp) {
+private fun Screens(app: ToneferApp, wanted: androidx.compose.runtime.MutableState<String?>) {
     val settings by app.settings.state.collectAsState()
     val conn by app.client.conn.collectAsState()
     var screen by rememberSaveable { mutableStateOf(Screen.HOME) }
     var help by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(wanted.value) {
+        if (wanted.value == "host") { screen = Screen.HOST; help = false }
+        wanted.value = null
+    }
 
     BackHandler(enabled = screen != Screen.HOME || help) {
         if (help) help = false else screen = if (screen == Screen.ABOUT) Screen.SETTINGS else Screen.HOME
     }
 
     if (help) { InstructionsScreen(onBack = { help = false }); return }
+    // Phone to phone needs no laptop, so it opens even before pairing.
+    if (screen == Screen.HOST) { com.pankqx.tonefer.p2p.HostScreen(app, onBack = { screen = Screen.HOME }); return }
 
     val paired = settings.pairing != null
     if (!paired || conn is Conn.Unpaired) {
-        PairScreen(app, unpaired = paired && conn is Conn.Unpaired, onHelp = { help = true })
+        PairScreen(app, unpaired = paired && conn is Conn.Unpaired, onHelp = { help = true }, onPhoneToPhone = { screen = Screen.HOST })
         return
     }
     when (screen) {
@@ -104,10 +124,12 @@ private fun Screens(app: ToneferApp) {
             onHelp = { help = true },
             onAbout = { screen = Screen.ABOUT },
             onGallery = { screen = Screen.GALLERY },
+            onPhoneToPhone = { screen = Screen.HOST },
         )
         Screen.SETTINGS -> SettingsScreen(app, onBack = { screen = Screen.HOME }, onAbout = { screen = Screen.ABOUT })
         Screen.HELP -> InstructionsScreen(onBack = { screen = Screen.HOME })
         Screen.ABOUT -> AboutScreen(onBack = { screen = Screen.SETTINGS })
         Screen.GALLERY -> com.pankqx.tonefer.gallery.GalleryScreen(app, onBack = { screen = Screen.HOME })
+        Screen.HOST -> Unit
     }
 }

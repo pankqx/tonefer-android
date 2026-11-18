@@ -101,6 +101,12 @@
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
 
+        <!-- Phone to phone: this phone serves the Tonefer page to another phone on its hotspot. -->
+        <service
+            android:name=".p2p.HostService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+
         <receiver
             android:name=".service.CopyReceiver"
             android:exported="false" />

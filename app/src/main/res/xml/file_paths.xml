@@ -2,4 +2,5 @@
 <paths>
     <cache-path name="received" path="received/" />
     <cache-path name="update" path="update/" />
+    <cache-path name="p2p" path="p2p/" />
 </paths>

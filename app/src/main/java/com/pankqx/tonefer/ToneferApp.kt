@@ -28,6 +28,8 @@ class ToneferApp : Application() {
         private set
     lateinit var client: ToneferClient
     val updater by lazy { com.pankqx.tonefer.util.Updater(this) }
+    /** Phone to phone: this phone serving another phone directly. */
+    val host by lazy { com.pankqx.tonefer.p2p.PhoneHost(this) }
     private var lastUpdateCheck = 0L
         private set
 

@@ -100,6 +100,32 @@ class ScreenshotTest {
         LoadingScreen(animate = false, frozenAtMs = 4_100f)
     }
 
+    @Test fun phoneToPhoneIntro() {
+        app.host.preview(com.pankqx.tonefer.p2p.PhoneHost.State())
+        shot("10-p2p-intro") { com.pankqx.tonefer.p2p.HostScreen(app) {} }
+    }
+
+    @Test fun phoneToPhoneCode() {
+        app.host.preview(com.pankqx.tonefer.p2p.PhoneHost.State(running = true, port = 8765,
+            addresses = listOf("192.168.43.1", "10.0.0.24"), key = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"))
+        shot("11-p2p-code") { com.pankqx.tonefer.p2p.HostScreen(app) {} }
+    }
+
+    @Test fun phoneToPhoneChat() {
+        val now = System.currentTimeMillis()
+        app.host.preview(
+            com.pankqx.tonefer.p2p.PhoneHost.State(running = true, port = 8765, addresses = listOf("192.168.43.1"), key = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8", guests = 1),
+            listOf(
+                Item("a1", "text", "phone", now - 60_000, text = "Sending the trip photos now"),
+                Item("a2", "file", "phone", now - 50_000, name = "Goa trip.zip", size = 812_000_000, mime = "application/zip", files = 214),
+                Item("a3", "text", "laptop", now - 20_000, text = "Got them, thanks!"),
+                Item("a4", "file", "laptop", now - 10_000, name = "boarding-pass.pdf", size = 184_000, mime = "application/pdf"),
+            ),
+            listOf(com.pankqx.tonefer.p2p.PhoneHost.Transfer("t", "Receiving", "IMG_2041.MOV", .42f, 18.4e6)),
+        )
+        shot("12-p2p-chat") { com.pankqx.tonefer.p2p.HostScreen(app) {} }
+    }
+
     @Test fun homeQueued() {
         pair()
         app.client.preview(emptyList(), Conn.Searching)

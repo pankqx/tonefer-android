@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.0 — November 2026
+
+- Phone to phone (menu → Phone to phone, or on the welcome screen): this phone shows a QR code, and any other phone, iPhone included, scans it with its camera and opens Tonefer in its browser. Notes, photos, files and whole folders go straight between the two phones over the hotspot, encrypted, with no laptop and no app on the other phone
+- Big files go in chunks and are read in place, so a 4 GB video is not copied first. Folders are packed into one zip, photos and videos stored as they are
+- Runs in the background with a notification showing the other phone and progress; Stop from the notification. It ends by itself after 15 minutes with nobody connected
+
 ## 1.8.0 — November 2026
 
 - Reels-style viewer in the Gallery: swipe up for the next photo or video. The next and previous videos are prepared while you watch, so they start instantly; tap to pause

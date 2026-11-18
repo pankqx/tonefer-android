@@ -28,6 +28,7 @@ The Android companion to [Tonefer](https://github.com/pankqx/tonefer). Share not
 | **Auto-save & auto-copy** | Photos go to `Pictures/Tonefer` and notes to the clipboard, each optional. |
 | **End-to-end encrypted** | XSalsa20‑Poly1305 (NaCl `secretbox`) with a 256‑bit key exchanged only through the QR code. No servers or accounts. |
 | **Customisable** | Theme, text size, typeface, background, window style, photo quality, notifications and background connection. |
+| **Phone to phone** | No laptop needed: show a QR code and any other phone (iPhone too) scans it with its camera. Notes, photos, files and folders go straight between the phones, encrypted, over the hotspot. |
 | **Old-school by design** | Paper-and-ink windows with pinstriped title bars and IBM Plex Mono, matching the laptop app. |
 
 ## Install
@@ -56,6 +57,8 @@ app/src/main/java/com/pankqx/tonefer/
 ├── data/                      Settings (DataStore), pairing link parsing, history items
 ├── net/Discovery.kt           Finds the laptop by probing local subnets with the pairing token
 ├── net/ToneferClient.kt       WebSocket session, encrypted upload/download, reconnect loop
+├── p2p/                       Phone to phone: HostCore.java (HTTP + WebSocket server speaking the
+│                              laptop's protocol), PhoneHost (session state), HostScreen (QR code)
 ├── service/                   Foreground service for background delivery, notifications
 ├── share/ShareActivity.kt     Invisible "Share → Tonefer" target
 └── ui/                        Jetpack Compose: pairing, timeline, settings, instructions

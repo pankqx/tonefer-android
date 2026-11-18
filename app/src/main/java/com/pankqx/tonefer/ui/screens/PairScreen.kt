@@ -47,7 +47,7 @@ import com.pankqx.tonefer.ui.theme.ts
 import kotlinx.coroutines.launch
 
 @Composable
-fun PairScreen(app: ToneferApp, unpaired: Boolean = false, onHelp: () -> Unit) {
+fun PairScreen(app: ToneferApp, unpaired: Boolean = false, onHelp: () -> Unit, onPhoneToPhone: () -> Unit = {}) {
     val tone = LocalTone.current
     val scope = rememberCoroutineScope()
     var error by remember { mutableStateOf<String?>(null) }
@@ -140,6 +140,12 @@ fun PairScreen(app: ToneferApp, unpaired: Boolean = false, onHelp: () -> Unit) {
                     Spacer(Modifier.height(12.dp))
                     Text(it, color = tone.danger, fontSize = ts(12.5f))
                 }
+            }
+            Spacer(Modifier.height(14.dp))
+            RetroWindow(title = "No laptop?", modifier = Modifier.fillMaxWidth(), dot = tone.accent) {
+                Text("Send straight to another phone, iPhone included. It just scans a code with its camera.", color = tone.muted, fontSize = ts(13f))
+                Spacer(Modifier.height(12.dp))
+                RetroButton("Phone to phone", icon = R.drawable.ic_arrows, modifier = Modifier.fillMaxWidth(), onClick = onPhoneToPhone)
             }
             Spacer(Modifier.height(22.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {

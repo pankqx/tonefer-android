@@ -105,7 +105,7 @@ import java.util.Calendar
 import java.util.Date
 
 @Composable
-fun HomeScreen(app: ToneferApp, onSettings: () -> Unit, onHelp: () -> Unit, onAbout: () -> Unit, onGallery: () -> Unit = {}) {
+fun HomeScreen(app: ToneferApp, onSettings: () -> Unit, onHelp: () -> Unit, onAbout: () -> Unit, onGallery: () -> Unit = {}, onPhoneToPhone: () -> Unit = {}) {
     val tone = LocalTone.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -225,6 +225,7 @@ fun HomeScreen(app: ToneferApp, onSettings: () -> Unit, onHelp: () -> Unit, onAb
                         MenuRow("Connect again") { menu = false; connectAgain() }
                         MenuRow("Scan pairing code again") { menu = false; scanAgain() }
                         MenuRow("Turn on hotspot") { menu = false; Hotspot.open(context) }
+                        MenuRow("Phone to phone") { menu = false; onPhoneToPhone() }
                         MenuRow("Gallery") { menu = false; onGallery() }
                         MenuRow("Settings") { menu = false; onSettings() }
                         MenuRow("Instructions") { menu = false; onHelp() }
